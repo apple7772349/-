@@ -90,11 +90,25 @@
         document.body.removeChild(link);
     };
 
-    // 匯出 Excel
+    // 匯出 Excel (老闆需求：移除通行證、狀態、下次驗車、週期)
     const exportToExcel = (vehicles) => {
         if (vehicles.length === 0 || !confirm("確定匯出報表？")) return;
-        const headers = ["公司","車號","品牌","年份","噸數","週期","上次驗車","下次驗車","狀態","保險日","保險公司","車主","備註"];
-        const rows = vehicles.map(v => [v.company, v.plate, v.brand, v.year, v.tonnage, v.cycle, toROCDate(v.lastDate), toROCDate(v.nextDate), v.status, toROCDate(v.insuranceDate), v.insurer, v.owner, v.notes]);
+        
+        const headers = ["公司","車號","品牌","年份","噸數","上次驗車日","保險到期日","保險公司","車主","備註"];
+        
+        const rows = vehicles.map(v => [
+            v.company, 
+            v.plate, 
+            v.brand, 
+            v.year, 
+            v.tonnage, 
+            toROCDate(v.lastDate), 
+            toROCDate(v.insuranceDate), 
+            v.insurer, 
+            v.owner, 
+            v.notes
+        ]);
+        
         const csvContent = ["\ufeff" + headers.join(",")].concat(rows.map(row => row.map(f => `"${(f||'').toString().replace(/"/g,'""')}"`).join(","))).join("\n");
         const link = document.createElement('a');
         link.href = window.URL.createObjectURL(new Blob([csvContent], { type: 'text/csv;charset=utf-8;' }));
@@ -104,7 +118,6 @@
         document.body.removeChild(link);
     };
 
-    // 匯出 JSON (同步用)
     const exportSyncData = (vehicles) => {
         if (vehicles.length === 0) return alert("沒有資料可傳送");
         const jsonContent = JSON.stringify(vehicles);
@@ -127,9 +140,10 @@
         const [searchTerm, setSearchTerm] = useState('');
         const [showInstallGuide, setShowInstallGuide] = useState(false);
         const fileInputRef = useRef(null);
+        const passFileInputRef = useRef(null); 
 
         const [formData, setFormData] = useState({
-            plate: '', brand: '', year: '', tonnage: '', cycle: '一年', lastDate: '', status: '完成', insuranceDate: '', insurer: '', owner: '', notes: ''
+            plate: '', brand: '', year: '', tonnage: '', cycle: '一年', lastDate: '', status: '完成', insuranceDate: '', insurer: '', passName: '', passDate: '', passFile: '', passFileName: '', owner: '', notes: ''
         });
 
         useEffect(() => {
@@ -140,10 +154,15 @@
         }, []);
 
         useEffect(() => {
-            if (vehicles.length > 0) localStorage.setItem('myVehicleData_iOS_v2', JSON.stringify(vehicles));
+            if (vehicles.length > 0) {
+                try {
+                    localStorage.setItem('myVehicleData_iOS_v2', JSON.stringify(vehicles));
+                } catch (e) {
+                    alert("儲存失敗：手機容量已滿！\n請刪除一些通行證檔案或舊資料。");
+                }
+            }
         }, [vehicles]);
 
-        // 匯入功能
         const handleImport = (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -175,10 +194,38 @@
             reader.readAsText(file);
         };
 
+        const handlePassFileChange = (event) => {
+            const file = event.target.files[0];
+            if (!file) return;
+            if (file.size > 500 * 1024) {
+                alert("檔案太大了！(超過 500KB)\n為了避免手機容量爆炸，請上傳較小的 PDF 或截圖。");
+                event.target.value = null;
+                return;
+            }
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                setFormData({
+                    ...formData,
+                    passFile: e.target.result,
+                    passFileName: file.name
+                });
+            };
+            reader.readAsDataURL(file);
+        };
+
+        const clearPassFile = () => {
+            setFormData({ ...formData, passFile: '', passFileName: '' });
+            if(passFileInputRef.current) passFileInputRef.current.value = '';
+        };
+
         const alerts = useMemo(() => {
             const limit = new Date();
             limit.setDate(limit.getDate() + 30);
-            return vehicles.filter(v => new Date(v.nextDate) <= limit || (v.insuranceDate && new Date(v.insuranceDate) <= limit) || v.status === '待驗');
+            return vehicles.filter(v => {
+                const insDue = v.insuranceDate && new Date(v.insuranceDate) <= limit;
+                const passDue = v.passDate && new Date(v.passDate) <= limit;
+                return new Date(v.nextDate) <= limit || insDue || passDue || v.status === '待驗';
+            });
         }, [vehicles]);
 
         const handleSave = (e) => {
@@ -204,7 +251,7 @@
 
         const openModal = (v = null) => {
             if (v) { setFormData({...v}); setEditingId(v.id); }
-            else { setFormData({ plate: '', brand: '', year: '', tonnage: '', cycle: '一年', lastDate: '', status: '完成', insuranceDate: '', insurer: '', owner: '', notes: '' }); setEditingId(null); }
+            else { setFormData({ plate: '', brand: '', year: '', tonnage: '', cycle: '一年', lastDate: '', status: '完成', insuranceDate: '', insurer: '', passName: '', passDate: '', passFile: '', passFileName: '', owner: '', notes: '' }); setEditingId(null); }
             setIsModalOpen(true);
         };
 
@@ -223,9 +270,10 @@
                 {showInstallGuide && (
                     <div className="fixed inset-0 z-50 bg-black/80 flex flex-col justify-end p-4 animate-fade-in">
                         <div className="bg-white rounded-xl p-6">
-                            <h3 className="font-bold text-lg mb-4">📲 安裝到桌面</h3>
-                            <p className="mb-2">1. 點擊下方 <span className="font-bold text-blue-600">分享按鈕</span></p>
-                            <p className="mb-4">2. 選 <span className="font-bold text-blue-600">加入主畫面</span></p>
+                            <h3 className="font-bold text-lg mb-4 text-blue-900">📲 老闆請安裝到桌面 (重要!)</h3>
+                            <p className="mb-2">1. 點擊下方 <span className="font-bold text-blue-600">分享按鈕</span>。</p>
+                            <p className="mb-4">2. 選擇 <span className="font-bold text-blue-600">加入主畫面</span>。</p>
+                            <p className="mb-4 text-sm text-red-600 font-bold">3. 完成！請從桌面圖示進入，資料才安全。</p>
                             <button onClick={() => setShowInstallGuide(false)} className="w-full bg-slate-200 py-3 rounded-lg font-bold">我知道了</button>
                         </div>
                     </div>
@@ -257,14 +305,18 @@
                             className="w-full bg-blue-800/50 text-white placeholder-blue-300 rounded px-3 py-2 text-sm outline-none" />
                         
                         <div className="flex overflow-x-auto gap-2 hide-scrollbar pb-1 w-full">
-                            {COMPANY_TABS.map(tab => (
-                                <button key={tab} onClick={() => setActiveTab(tab)}
-                                    className={`whitespace-nowrap px-3 py-1.5 rounded text-xs font-bold transition-colors flex-shrink-0 ${
-                                        activeTab === tab ? 'bg-white text-blue-900' : 'bg-blue-800/40 text-blue-100'
-                                    }`}>
-                                    {tab}
-                                </button>
-                            ))}
+                            {COMPANY_TABS.map(tab => {
+                                // 計算每個分頁的車輛數
+                                const count = vehicles.filter(v => v.company === tab).length;
+                                return (
+                                    <button key={tab} onClick={() => setActiveTab(tab)}
+                                        className={`whitespace-nowrap px-3 py-1.5 rounded text-xs font-bold transition-colors flex-shrink-0 ${
+                                            activeTab === tab ? 'bg-white text-blue-900' : 'bg-blue-800/40 text-blue-100'
+                                        }`}>
+                                        {tab} <span className="ml-1 opacity-80">({count})</span>
+                                    </button>
+                                );
+                            })}
                         </div>
                     </div>
                 </div>
@@ -275,13 +327,18 @@
                         <div className="text-center py-10 text-slate-400">
                             <div className="text-4xl mb-2">🚛</div>
                             <p>尚無資料</p>
-                            <p className="text-sm">可按「匯入」接收員工資料</p>
+                            <p className="text-sm">點右上角「➕」新增</p>
                         </div>
                     ) : (
                         sortedVehicles.map(v => {
-                            const isExpire = new Date(v.nextDate) <= new Date(new Date().setDate(new Date().getDate()+30));
+                            const limit = new Date(); limit.setDate(limit.getDate()+30);
+                            const isInspExp = new Date(v.nextDate) <= limit;
+                            const isInsExp = v.insuranceDate && new Date(v.insuranceDate) <= limit;
+                            const isPassExp = v.passDate && new Date(v.passDate) <= limit;
+                            const isCritical = v.status === '待驗' || isInspExp || isInsExp || isPassExp;
+
                             return (
-                                <div key={v.id} className={`bg-white rounded-lg shadow p-3 border-l-4 ${v.status === '待驗' ? 'border-red-500' : isExpire ? 'border-orange-400' : 'border-green-500'}`}>
+                                <div key={v.id} className={`bg-white rounded-lg shadow p-3 border-l-4 ${isCritical ? (v.status==='待驗'?'border-red-500':'border-orange-400') : 'border-green-500'}`}>
                                     <div className="flex justify-between items-start mb-2 border-b pb-2">
                                         <div>
                                             <div className="flex items-center gap-2">
@@ -311,7 +368,7 @@
                                                 <span>下次驗車</span>
                                                 <span className="text-[9px]">{toROCDate(v.lastDate)}</span>
                                             </div>
-                                            <div className={`font-bold text-base ${v.status==='待驗'||isExpire?'text-red-600':''}`}>
+                                            <div className={`font-bold text-base ${v.status==='待驗'||isInspExp?'text-red-600':''}`}>
                                                 📅 {toROCDate(v.nextDate)}
                                             </div>
                                         </div>
@@ -324,13 +381,33 @@
                                                 🛡️ {toROCDate(v.insuranceDate) || '--'}
                                             </div>
                                         </div>
+                                        {/* 通行證顯示區 */}
+                                        {(v.passName || v.passDate || v.passFile) && (
+                                            <div className="col-span-2 bg-purple-50 p-2 rounded border border-purple-100 flex flex-col gap-1">
+                                                <div className="flex justify-between items-center">
+                                                    <div className="text-[10px] text-purple-700">
+                                                        🎫 {v.passName || '通行證'}
+                                                    </div>
+                                                    <div className={`font-bold text-base ${isPassExp ? 'text-red-600' : 'text-purple-900'}`}>
+                                                        {toROCDate(v.passDate) || '--'}
+                                                    </div>
+                                                </div>
+                                                {v.passFile && (
+                                                    <a href={v.passFile} download={v.passFileName || "通行證"} className="text-xs text-center bg-white border border-purple-200 text-purple-700 py-1 rounded font-bold">
+                                                        📄 下載/查看通行證
+                                                    </a>
+                                                )}
+                                            </div>
+                                        )}
                                     </div>
                                     
                                     {v.notes && <div className="mt-2 text-xs bg-yellow-50 p-2 rounded text-yellow-800 border border-yellow-100">📝 {v.notes}</div>}
                                     
-                                    <button onClick={() => downloadCalendarEvent(v)} className="w-full mt-2 border border-blue-200 text-blue-600 py-1.5 rounded text-xs font-bold bg-blue-50">
-                                        🔔 加入行事曆
-                                    </button>
+                                    <div className="flex gap-2 mt-2">
+                                        <button onClick={() => downloadCalendarEvent(v)} className="flex-1 border border-blue-200 text-blue-600 py-1.5 rounded text-xs font-bold bg-blue-50">
+                                            🔔 加入行事曆
+                                        </button>
+                                    </div>
                                 </div>
                             )
                         })
@@ -371,7 +448,7 @@
                                     </div>
                                 </div>
                                 
-                                {/* 保險區 - 修改為上下排列 */}
+                                {/* 保險區 - 上下排列 */}
                                 <div className="bg-green-50 p-3 rounded border border-green-100">
                                     <div className="space-y-3">
                                         <div>
@@ -381,6 +458,36 @@
                                         <div>
                                             <label className="text-xs font-bold text-green-800">保險公司</label>
                                             <input className="w-full border rounded p-2 mt-1" placeholder="例如：富邦" value={formData.insurer} onChange={e=>setFormData({...formData, insurer: e.target.value})} />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* 通行證區 (包含檔案上傳) */}
+                                <div className="bg-purple-50 p-3 rounded border border-purple-100">
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="text-xs font-bold text-purple-800">通行證到期</label>
+                                            <input type="date" className="w-full border rounded p-2 mt-1" value={formData.passDate} onChange={e=>setFormData({...formData, passDate: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-purple-800">通行證名稱</label>
+                                            <input className="w-full border rounded p-2 mt-1" placeholder="例如：基隆港" value={formData.passName} onChange={e=>setFormData({...formData, passName: e.target.value})} />
+                                        </div>
+                                        {/* 檔案上傳區 */}
+                                        <div>
+                                            <label className="text-xs font-bold text-purple-800 flex justify-between">
+                                                <span>通行證檔案 (PDF/圖片)</span>
+                                                {formData.passFile && <span className="text-red-500" onClick={clearPassFile}>🗑️ 刪除檔案</span>}
+                                            </label>
+                                            <input 
+                                                type="file" 
+                                                accept="application/pdf, image/*"
+                                                className="w-full text-xs mt-1"
+                                                ref={passFileInputRef}
+                                                onChange={handlePassFileChange}
+                                            />
+                                            {formData.passFileName && <div className="text-[10px] text-gray-500 mt-1">已選擇: {formData.passFileName}</div>}
+                                            <div className="text-[10px] text-gray-400 mt-1">⚠️ 手機容量有限，請勿上傳超過 500KB 的大檔</div>
                                         </div>
                                     </div>
                                 </div>
