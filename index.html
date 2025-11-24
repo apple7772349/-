@@ -17,25 +17,24 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js" crossorigin></script>
     
     <style>
-        /* 2. 修正 iOS 彈性捲動導致的破版 */
+        /* 2. 終極防跑版設定 */
         html, body { 
             height: 100%; 
             width: 100%; 
-            overflow: hidden; 
+            max-width: 100vw; /* 絕對不准超過螢幕寬度 */
+            overflow-x: hidden; /* 超過的部分直接切掉 */
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             background-color: #f1f5f9;
-            -webkit-text-size-adjust: 100%; /* 禁止文字自動放大 */
+            -webkit-text-size-adjust: 100%;
+            touch-action: pan-y; /* 禁止左右滑動 */
         }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* 避免輸入框縮放 */
         input, select, textarea { font-size: 16px !important; }
         
-        /* 錯誤訊息框 */
         #error-box { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: white; z-index: 9999; padding: 20px; }
         
-        /* 解決 iOS 瀏海遮擋 */
         .safe-area-top { padding-top: env(safe-area-inset-top); }
         .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
     </style>
@@ -172,52 +171,58 @@
         }, [vehicles, activeTab, searchTerm]);
 
         return (
-            <div className="flex flex-col h-full bg-slate-100 safe-area-top safe-area-bottom">
+            <div className="flex flex-col h-full bg-slate-100 safe-area-top safe-area-bottom w-full max-w-full overflow-hidden">
                 
-                {/* 安裝教學 */}
+                {/* 安裝教學 (隱藏) */}
                 {showInstallGuide && (
                     <div className="fixed inset-0 z-50 bg-black/80 flex flex-col justify-end p-4 animate-fade-in">
                         <div className="bg-white rounded-xl p-6">
                             <h3 className="font-bold text-lg mb-4">📲 安裝到桌面</h3>
-                            <p className="mb-2">1. 點擊下方 <span className="font-bold text-blue-600">分享按鈕</span> (方框箭頭)</p>
+                            <p className="mb-2">1. 點擊下方 <span className="font-bold text-blue-600">分享按鈕</span></p>
                             <p className="mb-4">2. 選 <span className="font-bold text-blue-600">加入主畫面</span></p>
                             <button onClick={() => setShowInstallGuide(false)} className="w-full bg-slate-200 py-3 rounded-lg font-bold">我知道了</button>
                         </div>
                     </div>
                 )}
 
-                {/* 頂部導航 */}
-                <div className="bg-blue-900 text-white p-3 shadow-lg z-10">
-                    <div className="flex justify-between items-center mb-3">
-                        <div className="flex items-center gap-2">
+                {/* 頂部導航 (這裡做了大瘦身) */}
+                <div className="bg-blue-900 text-white p-3 shadow-lg z-10 w-full">
+                    <div className="flex justify-between items-center mb-2">
+                        {/* 左邊標題 */}
+                        <div className="flex items-center gap-1 shrink-0">
                             <span className="text-xl">🚛</span>
-                            <div>
-                                {/* 這裡改成了「車輛管理」 */}
-                                <h1 className="font-bold">車輛管理</h1>
-                                <div className="text-[10px] opacity-70">iOS 修正版</div>
-                            </div>
+                            <h1 className="font-bold text-lg">車輛管理</h1>
                         </div>
-                        <div className="flex gap-2">
-                            <button onClick={() => setShowInstallGuide(true)} className="bg-blue-800 px-2 py-1 rounded text-xs">📲</button>
-                            <button onClick={() => exportToExcel(vehicles)} className="bg-green-600 px-3 py-1 rounded-full text-xs font-bold shadow">匯出</button>
-                            <button onClick={() => openModal()} className="bg-yellow-500 text-blue-900 px-3 py-1 rounded-full font-bold shadow">➕</button>
+                        
+                        {/* 右邊按鈕 (變小顆，文字拿掉或縮小) */}
+                        <div className="flex gap-2 shrink-0">
+                            <button onClick={() => setShowInstallGuide(true)} className="bg-blue-800 text-blue-100 px-2 py-1.5 rounded text-xs flex items-center">
+                                📲
+                            </button>
+                            <button onClick={() => exportToExcel(vehicles)} className="bg-green-600 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow flex items-center">
+                                匯出
+                            </button>
+                            <button onClick={() => openModal()} className="bg-yellow-500 text-blue-900 px-3 py-1.5 rounded-lg font-bold shadow text-xs flex items-center">
+                                ➕ 新增
+                            </button>
                         </div>
                     </div>
 
                     {alerts.length > 0 && (
-                        <div className="mb-2 bg-red-600 rounded p-2 flex items-center gap-2 text-xs text-white animate-pulse">
-                            <span>⚠️</span><span className="font-bold">{alerts.length} 台需處理！</span>
+                        <div className="mb-2 bg-red-600 rounded p-1.5 flex items-center gap-2 text-xs text-white animate-pulse">
+                            <span>⚠️</span><span className="font-bold">{alerts.length} 台需處理</span>
                         </div>
                     )}
 
-                    <div className="space-y-2">
+                    <div className="space-y-2 w-full">
                         <input type="text" placeholder="🔍 搜尋車牌..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
                             className="w-full bg-blue-800/50 text-white placeholder-blue-300 rounded px-3 py-2 text-sm outline-none" />
                         
-                        <div className="flex overflow-x-auto gap-2 hide-scrollbar pb-1">
+                        {/* 分頁按鈕 */}
+                        <div className="flex overflow-x-auto gap-2 hide-scrollbar pb-1 w-full">
                             {COMPANY_TABS.map(tab => (
                                 <button key={tab} onClick={() => setActiveTab(tab)}
-                                    className={`whitespace-nowrap px-3 py-1.5 rounded text-xs font-bold transition-colors ${
+                                    className={`whitespace-nowrap px-3 py-1.5 rounded text-xs font-bold transition-colors flex-shrink-0 ${
                                         activeTab === tab ? 'bg-white text-blue-900' : 'bg-blue-800/40 text-blue-100'
                                     }`}>
                                     {tab}
@@ -228,12 +233,12 @@
                 </div>
 
                 {/* 主要內容 */}
-                <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-20">
+                <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-20 w-full">
                     {sortedVehicles.length === 0 ? (
                         <div className="text-center py-10 text-slate-400">
                             <div className="text-4xl mb-2">🚛</div>
                             <p>尚無資料</p>
-                            <p className="text-sm">點右上角「➕」新增</p>
+                            <p className="text-sm">點右上角「➕ 新增」</p>
                         </div>
                     ) : (
                         sortedVehicles.map(v => {
