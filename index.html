@@ -2,7 +2,7 @@
 <html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
-    <!-- 1. 強制鎖定螢幕寬度，禁止縮放 -->
+    <!-- 強制鎖定螢幕寬度，禁止縮放 (防跑版核心) -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>車輛管理</title>
     
@@ -17,16 +17,16 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js" crossorigin></script>
     
     <style>
-        /* 2. 終極防跑版設定 */
+        /* CSS 設定：防止左右滑動破版 */
         html, body { 
             height: 100%; 
             width: 100%; 
-            max-width: 100vw; /* 絕對不准超過螢幕寬度 */
-            overflow-x: hidden; /* 超過的部分直接切掉 */
+            max-width: 100vw; 
+            overflow-x: hidden; 
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; 
             background-color: #f1f5f9;
             -webkit-text-size-adjust: 100%;
-            touch-action: pan-y; /* 禁止左右滑動 */
+            touch-action: pan-y; 
         }
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -55,7 +55,7 @@
 
 <div id="root" class="h-full w-full flex flex-col justify-center items-center text-slate-400">
     <div class="text-5xl mb-4 animate-bounce">🚛</div>
-    <div>載入中...</div>
+    <div>系統載入中...</div>
 </div>
 
 <script type="text/babel">
@@ -173,7 +173,6 @@
         return (
             <div className="flex flex-col h-full bg-slate-100 safe-area-top safe-area-bottom w-full max-w-full overflow-hidden">
                 
-                {/* 安裝教學 (隱藏) */}
                 {showInstallGuide && (
                     <div className="fixed inset-0 z-50 bg-black/80 flex flex-col justify-end p-4 animate-fade-in">
                         <div className="bg-white rounded-xl p-6">
@@ -185,26 +184,17 @@
                     </div>
                 )}
 
-                {/* 頂部導航 (這裡做了大瘦身) */}
+                {/* 頂部導航 */}
                 <div className="bg-blue-900 text-white p-3 shadow-lg z-10 w-full">
                     <div className="flex justify-between items-center mb-2">
-                        {/* 左邊標題 */}
                         <div className="flex items-center gap-1 shrink-0">
                             <span className="text-xl">🚛</span>
                             <h1 className="font-bold text-lg">車輛管理</h1>
                         </div>
-                        
-                        {/* 右邊按鈕 (變小顆，文字拿掉或縮小) */}
                         <div className="flex gap-2 shrink-0">
-                            <button onClick={() => setShowInstallGuide(true)} className="bg-blue-800 text-blue-100 px-2 py-1.5 rounded text-xs flex items-center">
-                                📲
-                            </button>
-                            <button onClick={() => exportToExcel(vehicles)} className="bg-green-600 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow flex items-center">
-                                匯出
-                            </button>
-                            <button onClick={() => openModal()} className="bg-yellow-500 text-blue-900 px-3 py-1.5 rounded-lg font-bold shadow text-xs flex items-center">
-                                ➕ 新增
-                            </button>
+                            <button onClick={() => setShowInstallGuide(true)} className="bg-blue-800 text-blue-100 px-2 py-1.5 rounded text-xs">📲</button>
+                            <button onClick={() => exportToExcel(vehicles)} className="bg-green-600 text-white px-2 py-1.5 rounded-lg text-xs font-bold shadow">匯出</button>
+                            <button onClick={() => openModal()} className="bg-yellow-500 text-blue-900 px-3 py-1.5 rounded-lg font-bold shadow text-xs">➕ 新增</button>
                         </div>
                     </div>
 
@@ -218,7 +208,6 @@
                         <input type="text" placeholder="🔍 搜尋車牌..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
                             className="w-full bg-blue-800/50 text-white placeholder-blue-300 rounded px-3 py-2 text-sm outline-none" />
                         
-                        {/* 分頁按鈕 */}
                         <div className="flex overflow-x-auto gap-2 hide-scrollbar pb-1 w-full">
                             {COMPANY_TABS.map(tab => (
                                 <button key={tab} onClick={() => setActiveTab(tab)}
@@ -232,7 +221,7 @@
                     </div>
                 </div>
 
-                {/* 主要內容 */}
+                {/* 主要內容：卡片顯示詳細資料 */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-20 w-full">
                     {sortedVehicles.length === 0 ? (
                         <div className="text-center py-10 text-slate-400">
@@ -245,13 +234,24 @@
                             const isExpire = new Date(v.nextDate) <= new Date(new Date().setDate(new Date().getDate()+30));
                             return (
                                 <div key={v.id} className={`bg-white rounded-lg shadow p-3 border-l-4 ${v.status === '待驗' ? 'border-red-500' : isExpire ? 'border-orange-400' : 'border-green-500'}`}>
+                                    {/* 第一排：車號、狀態、操作 */}
                                     <div className="flex justify-between items-start mb-2 border-b pb-2">
                                         <div>
                                             <div className="flex items-center gap-2">
-                                                <span className="text-lg font-bold">{v.plate}</span>
+                                                <span className="text-xl font-bold text-slate-800">{v.plate}</span>
                                                 {v.status === '待驗' && <span className="bg-red-100 text-red-600 text-[10px] px-1.5 py-0.5 rounded font-bold">待驗</span>}
                                             </div>
-                                            <div className="text-xs text-slate-500">{v.brand} · {v.year}年</div>
+                                            {/* 第二排：詳細資訊 (品牌 | 年份 | 噸數 | 車主) */}
+                                            <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-2">
+                                                <span>{v.brand}</span>
+                                                <span className="text-slate-300">|</span>
+                                                <span>{v.year}年({v.cycle})</span>
+                                                <span className="text-slate-300">|</span>
+                                                <span>{v.tonnage ? v.tonnage+'噸' : '-噸'}</span>
+                                            </div>
+                                            <div className="text-sm font-bold text-blue-800 mt-1">
+                                                👤 {v.owner || '未填車主'}
+                                            </div>
                                         </div>
                                         <div className="flex gap-3 text-lg">
                                             <button onClick={() => openModal(v)}>✏️</button>
@@ -259,18 +259,36 @@
                                         </div>
                                     </div>
                                     
-                                    <div className="grid grid-cols-2 gap-2 text-sm">
-                                        <div className="bg-slate-50 p-2 rounded">
-                                            <div className="text-[10px] text-slate-400">下次驗車</div>
-                                            <div className={`font-bold ${v.status==='待驗'||isExpire?'text-red-600':''}`}>📅 {toROCDate(v.nextDate)}</div>
+                                    {/* 資訊區塊：驗車與保險 */}
+                                    <div className="grid grid-cols-2 gap-2 text-sm mt-2">
+                                        {/* 左邊：驗車 */}
+                                        <div className="bg-slate-50 p-2 rounded border border-slate-100">
+                                            <div className="text-[10px] text-slate-400 flex justify-between">
+                                                <span>下次驗車</span>
+                                                <span className="text-[9px]">{toROCDate(v.lastDate)}</span>
+                                            </div>
+                                            <div className={`font-bold text-base ${v.status==='待驗'||isExpire?'text-red-600':''}`}>
+                                                📅 {toROCDate(v.nextDate)}
+                                            </div>
                                         </div>
-                                        <div className="bg-slate-50 p-2 rounded">
-                                            <div className="text-[10px] text-slate-400">保險到期</div>
-                                            <div className="font-medium">{toROCDate(v.insuranceDate) || '未填'}</div>
+                                        {/* 右邊：保險 */}
+                                        <div className="bg-green-50 p-2 rounded border border-green-100">
+                                            <div className="text-[10px] text-green-700 flex justify-between">
+                                                <span>保險到期</span>
+                                                <span className="text-[9px]">{v.insurer}</span>
+                                            </div>
+                                            <div className="font-bold text-base text-slate-700">
+                                                🛡️ {toROCDate(v.insuranceDate) || '--'}
+                                            </div>
                                         </div>
                                     </div>
-                                    {v.notes && <div className="mt-2 text-xs bg-yellow-50 p-1.5 rounded text-yellow-800">📝 {v.notes}</div>}
-                                    <button onClick={() => downloadCalendarEvent(v)} className="w-full mt-2 border border-blue-200 text-blue-600 py-1.5 rounded text-xs font-bold">🔔 加入行事曆</button>
+                                    
+                                    {/* 備註 */}
+                                    {v.notes && <div className="mt-2 text-xs bg-yellow-50 p-2 rounded text-yellow-800 border border-yellow-100">📝 {v.notes}</div>}
+                                    
+                                    <button onClick={() => downloadCalendarEvent(v)} className="w-full mt-2 border border-blue-200 text-blue-600 py-1.5 rounded text-xs font-bold bg-blue-50">
+                                        🔔 加入行事曆
+                                    </button>
                                 </div>
                             )
                         })
@@ -286,30 +304,48 @@
                                 <button onClick={closeModal} className="text-xl">✖️</button>
                             </div>
                             <form onSubmit={handleSave} className="space-y-3">
+                                {/* 第一排 */}
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="text-xs font-bold">車號 *</label><input required className="w-full border rounded p-2 uppercase" value={formData.plate} onChange={e=>setFormData({...formData, plate: e.target.value.toUpperCase()})} /></div>
-                                    <div><label className="text-xs font-bold">品牌</label><input className="w-full border rounded p-2" value={formData.brand} onChange={e=>setFormData({...formData, brand: e.target.value})} /></div>
+                                    <div><label className="text-xs font-bold text-slate-500">車號 *</label><input required className="w-full border rounded p-2 uppercase font-bold" value={formData.plate} onChange={e=>setFormData({...formData, plate: e.target.value.toUpperCase()})} /></div>
+                                    <div><label className="text-xs font-bold text-slate-500">品牌</label><input className="w-full border rounded p-2" value={formData.brand} onChange={e=>setFormData({...formData, brand: e.target.value})} /></div>
                                 </div>
+                                {/* 第二排 */}
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="text-xs font-bold">年份(西元)*</label><input required type="number" className="w-full border rounded p-2" value={formData.year} onChange={e=>{
+                                    <div><label className="text-xs font-bold text-slate-500">年份(西元)*</label><input required type="number" className="w-full border rounded p-2" value={formData.year} onChange={e=>{
                                         const y=e.target.value;
                                         setFormData({...formData, year:y, cycle: (new Date().getFullYear()-y)>5?'半年':'一年'})
                                     }} /></div>
-                                    <div><label className="text-xs font-bold">週期</label><input disabled className="w-full bg-slate-100 border rounded p-2 text-slate-500" value={formData.cycle} /></div>
+                                    <div><label className="text-xs font-bold text-slate-500">噸數</label><input type="number" className="w-full border rounded p-2" value={formData.tonnage} onChange={e=>setFormData({...formData, tonnage: e.target.value})} /></div>
                                 </div>
-                                <div className="bg-slate-50 p-3 rounded">
-                                    <label className="text-xs font-bold">上次驗車 *</label>
+                                {/* 新增車主欄位 */}
+                                <div>
+                                    <label className="text-xs font-bold text-slate-500">車主姓名</label>
+                                    <input className="w-full border rounded p-2" placeholder="輸入車主姓名" value={formData.owner} onChange={e=>setFormData({...formData, owner: e.target.value})} />
+                                </div>
+                                
+                                {/* 驗車區 */}
+                                <div className="bg-slate-50 p-3 rounded border border-slate-200">
+                                    <div className="flex justify-between mb-1">
+                                        <label className="text-xs font-bold text-slate-500">上次驗車日 *</label>
+                                        <span className="text-[10px] text-blue-500">週期: {formData.cycle}</span>
+                                    </div>
                                     <input required type="date" className="w-full border rounded p-2 mb-2" value={formData.lastDate} onChange={e=>setFormData({...formData, lastDate: e.target.value})} />
                                     <div className="flex gap-2">
-                                        {['完成','待驗'].map(s=>(<button type="button" key={s} onClick={()=>setFormData({...formData, status:s})} className={`flex-1 py-1.5 rounded text-xs font-bold ${formData.status===s?(s==='完成'?'bg-green-500 text-white':'bg-red-500 text-white'):'bg-white border'}`}>{s}</button>))}
+                                        {['完成','待驗'].map(s=>(<button type="button" key={s} onClick={()=>setFormData({...formData, status:s})} className={`flex-1 py-1.5 rounded text-xs font-bold ${formData.status===s?(s==='完成'?'bg-green-500 text-white':'bg-red-500 text-white'):'bg-white border text-slate-500'}`}>{s}</button>))}
                                     </div>
                                 </div>
+                                
+                                {/* 保險區 */}
                                 <div className="bg-green-50 p-3 rounded border border-green-100">
-                                    <div className="mb-2"><label className="text-xs font-bold text-green-800">保險到期</label><input type="date" className="w-full border rounded p-2" value={formData.insuranceDate} onChange={e=>setFormData({...formData, insuranceDate: e.target.value})} /></div>
-                                    <div><label className="text-xs font-bold text-green-800">保險公司</label><input className="w-full border rounded p-2" value={formData.insurer} onChange={e=>setFormData({...formData, insurer: e.target.value})} /></div>
+                                    <div className="grid grid-cols-2 gap-3 mb-2">
+                                        <div><label className="text-xs font-bold text-green-800">保險到期</label><input type="date" className="w-full border rounded p-2" value={formData.insuranceDate} onChange={e=>setFormData({...formData, insuranceDate: e.target.value})} /></div>
+                                        <div><label className="text-xs font-bold text-green-800">保險公司</label><input className="w-full border rounded p-2" value={formData.insurer} onChange={e=>setFormData({...formData, insurer: e.target.value})} /></div>
+                                    </div>
                                 </div>
-                                <div><label className="text-xs font-bold">備註</label><textarea className="w-full border rounded p-2" rows="2" value={formData.notes} onChange={e=>setFormData({...formData, notes: e.target.value})}></textarea></div>
-                                <button className="w-full bg-blue-900 text-white py-3 rounded-lg font-bold">儲存</button>
+                                
+                                <div><label className="text-xs font-bold text-slate-500">備註</label><textarea className="w-full border rounded p-2" rows="2" value={formData.notes} onChange={e=>setFormData({...formData, notes: e.target.value})}></textarea></div>
+                                
+                                <button className="w-full bg-blue-900 text-white py-3 rounded-lg font-bold text-lg shadow-md">儲存資料</button>
                             </form>
                         </div>
                     </div>
