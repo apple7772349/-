@@ -90,7 +90,7 @@
         document.body.removeChild(link);
     };
 
-    // 匯出 Excel (給人看的)
+    // 匯出 Excel
     const exportToExcel = (vehicles) => {
         if (vehicles.length === 0 || !confirm("確定匯出報表？")) return;
         const headers = ["公司","車號","品牌","年份","噸數","週期","上次驗車","下次驗車","狀態","保險日","保險公司","車主","備註"];
@@ -104,7 +104,7 @@
         document.body.removeChild(link);
     };
 
-    // 匯出 JSON (給系統同步用的)
+    // 匯出 JSON (同步用)
     const exportSyncData = (vehicles) => {
         if (vehicles.length === 0) return alert("沒有資料可傳送");
         const jsonContent = JSON.stringify(vehicles);
@@ -114,7 +114,7 @@
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        alert("同步檔已下載！\n請用 Line 傳給老闆，老闆再按「匯入」即可。");
+        alert("同步檔已下載！請傳給老闆匯入。");
     };
 
     const COMPANY_TABS = ["綿豐(頭)", "銓豐(頭)", "綿豐貨運(頭)", "綿豐(尾)", "銓豐(尾)", "綿豐貨運(尾)"];
@@ -143,41 +143,34 @@
             if (vehicles.length > 0) localStorage.setItem('myVehicleData_iOS_v2', JSON.stringify(vehicles));
         }, [vehicles]);
 
-        // 匯入功能 (同步核心)
+        // 匯入功能
         const handleImport = (event) => {
             const file = event.target.files[0];
             if (!file) return;
-
             const reader = new FileReader();
             reader.onload = (e) => {
                 try {
                     const importedData = JSON.parse(e.target.result);
                     if (!Array.isArray(importedData)) throw new Error("格式錯誤");
-
-                    // 合併邏輯：以車號 (plate) 為準。如果車號一樣，更新資料；如果沒這車號，新增。
                     const currentVehicles = [...vehicles];
                     let addedCount = 0;
                     let updatedCount = 0;
-
                     importedData.forEach(newV => {
                         const index = currentVehicles.findIndex(v => v.plate === newV.plate);
                         if (index !== -1) {
-                            // 更新舊資料
                             currentVehicles[index] = { ...newV, id: currentVehicles[index].id }; 
                             updatedCount++;
                         } else {
-                            // 新增資料 (給一個新ID)
                             currentVehicles.push({ ...newV, id: Date.now().toString() + Math.random() });
                             addedCount++;
                         }
                     });
-
                     setVehicles(currentVehicles);
                     alert(`同步成功！\n新增: ${addedCount} 筆\n更新: ${updatedCount} 筆`);
                 } catch (error) {
-                    alert("匯入失敗，請確認檔案是否為「車輛同步檔.json」");
+                    alert("匯入失敗，請確認檔案正確");
                 }
-                event.target.value = null; // 重置
+                event.target.value = null;
             };
             reader.readAsText(file);
         };
@@ -225,17 +218,14 @@
         return (
             <div className="flex flex-col h-full bg-slate-100 safe-area-top safe-area-bottom w-full max-w-full overflow-hidden">
                 
-                {/* 隱藏的檔案輸入框 */}
                 <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" style={{display:'none'}} />
 
-                {/* --- 修改 1：安裝教學視窗的文字調整 --- */}
                 {showInstallGuide && (
                     <div className="fixed inset-0 z-50 bg-black/80 flex flex-col justify-end p-4 animate-fade-in">
                         <div className="bg-white rounded-xl p-6">
-                            <h3 className="font-bold text-lg mb-4 text-blue-900">📲 老闆請安裝到桌面 (重要!)</h3>
-                            <p className="mb-2">1. 點擊螢幕最下方的 <span className="font-bold text-blue-600">分享按鈕</span> (方框箭頭)。</p>
-                            <p className="mb-4">2. 往下滑動，選擇 <span className="font-bold text-blue-600">加入主畫面</span>。</p>
-                            <p className="mb-4 text-sm text-red-600 font-bold">3. 完成！請從桌面新出現的圖示進入，資料才會安全儲存喔！</p>
+                            <h3 className="font-bold text-lg mb-4">📲 安裝到桌面</h3>
+                            <p className="mb-2">1. 點擊下方 <span className="font-bold text-blue-600">分享按鈕</span></p>
+                            <p className="mb-4">2. 選 <span className="font-bold text-blue-600">加入主畫面</span></p>
                             <button onClick={() => setShowInstallGuide(false)} className="w-full bg-slate-200 py-3 rounded-lg font-bold">我知道了</button>
                         </div>
                     </div>
@@ -249,19 +239,10 @@
                             <h1 className="font-bold text-lg">車輛管理</h1>
                         </div>
                         <div className="flex gap-2 shrink-0">
-                            {/* 同步按鈕區 */}
-                            <button onClick={() => exportSyncData(vehicles)} className="bg-purple-600 px-2 py-1.5 rounded text-xs font-bold shadow">
-                                📤 傳送
-                            </button>
-                            <button onClick={() => fileInputRef.current.click()} className="bg-blue-500 px-2 py-1.5 rounded text-xs font-bold shadow">
-                                📥 匯入
-                            </button>
-                            <button onClick={() => exportToExcel(vehicles)} className="bg-green-600 px-2 py-1.5 rounded text-xs font-bold shadow">
-                                報表
-                            </button>
-                            <button onClick={() => openModal()} className="bg-yellow-500 text-blue-900 px-2 py-1.5 rounded font-bold shadow text-xs">
-                                ➕
-                            </button>
+                            <button onClick={() => exportSyncData(vehicles)} className="bg-purple-600 px-2 py-1.5 rounded text-xs font-bold shadow">傳送</button>
+                            <button onClick={() => fileInputRef.current.click()} className="bg-blue-500 px-2 py-1.5 rounded text-xs font-bold shadow">匯入</button>
+                            <button onClick={() => exportToExcel(vehicles)} className="bg-green-600 px-2 py-1.5 rounded text-xs font-bold shadow">報表</button>
+                            <button onClick={() => openModal()} className="bg-yellow-500 text-blue-900 px-2 py-1.5 rounded font-bold shadow text-xs">➕</button>
                         </div>
                     </div>
 
@@ -294,7 +275,7 @@
                         <div className="text-center py-10 text-slate-400">
                             <div className="text-4xl mb-2">🚛</div>
                             <p>尚無資料</p>
-                            <p className="text-sm">可按「📥 匯入」接收員工資料</p>
+                            <p className="text-sm">可按「匯入」接收員工資料</p>
                         </div>
                     ) : (
                         sortedVehicles.map(v => {
@@ -365,9 +346,8 @@
                                 <button onClick={closeModal} className="text-xl">✖️</button>
                             </div>
                             <form onSubmit={handleSave} className="space-y-3">
-                                {/* --- 修改 2：車號輸入框的提示文字調整 --- */}
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="text-xs font-bold text-slate-500">車號 *</label><input required className="w-full border rounded p-2 uppercase font-bold" placeholder="請輸入車牌 (例如: ABC-1234)" value={formData.plate} onChange={e=>setFormData({...formData, plate: e.target.value.toUpperCase()})} /></div>
+                                    <div><label className="text-xs font-bold text-slate-500">車號 *</label><input required className="w-full border rounded p-2 uppercase font-bold" placeholder="ABC-1234" value={formData.plate} onChange={e=>setFormData({...formData, plate: e.target.value.toUpperCase()})} /></div>
                                     <div><label className="text-xs font-bold text-slate-500">品牌</label><input className="w-full border rounded p-2" value={formData.brand} onChange={e=>setFormData({...formData, brand: e.target.value})} /></div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
@@ -378,6 +358,8 @@
                                     <div><label className="text-xs font-bold text-slate-500">噸數</label><input type="number" className="w-full border rounded p-2" value={formData.tonnage} onChange={e=>setFormData({...formData, tonnage: e.target.value})} /></div>
                                 </div>
                                 <div><label className="text-xs font-bold text-slate-500">車主姓名</label><input className="w-full border rounded p-2" placeholder="輸入車主姓名" value={formData.owner} onChange={e=>setFormData({...formData, owner: e.target.value})} /></div>
+                                
+                                {/* 驗車區 */}
                                 <div className="bg-slate-50 p-3 rounded border border-slate-200">
                                     <div className="flex justify-between mb-1">
                                         <label className="text-xs font-bold text-slate-500">上次驗車日 *</label>
@@ -388,12 +370,21 @@
                                         {['完成','待驗'].map(s=>(<button type="button" key={s} onClick={()=>setFormData({...formData, status:s})} className={`flex-1 py-1.5 rounded text-xs font-bold ${formData.status===s?(s==='完成'?'bg-green-500 text-white':'bg-red-500 text-white'):'bg-white border text-slate-500'}`}>{s}</button>))}
                                     </div>
                                 </div>
+                                
+                                {/* 保險區 - 修改為上下排列 */}
                                 <div className="bg-green-50 p-3 rounded border border-green-100">
-                                    <div className="grid grid-cols-2 gap-3 mb-2">
-                                        <div><label className="text-xs font-bold text-green-800">保險到期</label><input type="date" className="w-full border rounded p-2" value={formData.insuranceDate} onChange={e=>setFormData({...formData, insuranceDate: e.target.value})} /></div>
-                                        <div><label className="text-xs font-bold text-green-800">保險公司</label><input className="w-full border rounded p-2" value={formData.insurer} onChange={e=>setFormData({...formData, insurer: e.target.value})} /></div>
+                                    <div className="space-y-3">
+                                        <div>
+                                            <label className="text-xs font-bold text-green-800">保險到期</label>
+                                            <input type="date" className="w-full border rounded p-2 mt-1" value={formData.insuranceDate} onChange={e=>setFormData({...formData, insuranceDate: e.target.value})} />
+                                        </div>
+                                        <div>
+                                            <label className="text-xs font-bold text-green-800">保險公司</label>
+                                            <input className="w-full border rounded p-2 mt-1" placeholder="例如：富邦" value={formData.insurer} onChange={e=>setFormData({...formData, insurer: e.target.value})} />
+                                        </div>
                                     </div>
                                 </div>
+                                
                                 <div><label className="text-xs font-bold text-slate-500">備註</label><textarea className="w-full border rounded p-2" rows="2" value={formData.notes} onChange={e=>setFormData({...formData, notes: e.target.value})}></textarea></div>
                                 <button className="w-full bg-blue-900 text-white py-3 rounded-lg font-bold text-lg shadow-md">儲存資料</button>
                             </form>
