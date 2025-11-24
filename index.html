@@ -228,12 +228,14 @@
                 {/* 隱藏的檔案輸入框 */}
                 <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" style={{display:'none'}} />
 
+                {/* --- 修改 1：安裝教學視窗的文字調整 --- */}
                 {showInstallGuide && (
                     <div className="fixed inset-0 z-50 bg-black/80 flex flex-col justify-end p-4 animate-fade-in">
                         <div className="bg-white rounded-xl p-6">
-                            <h3 className="font-bold text-lg mb-4">📲 安裝到桌面</h3>
-                            <p className="mb-2">1. 點擊下方 <span className="font-bold text-blue-600">分享按鈕</span></p>
-                            <p className="mb-4">2. 選 <span className="font-bold text-blue-600">加入主畫面</span></p>
+                            <h3 className="font-bold text-lg mb-4 text-blue-900">📲 老闆請安裝到桌面 (重要!)</h3>
+                            <p className="mb-2">1. 點擊螢幕最下方的 <span className="font-bold text-blue-600">分享按鈕</span> (方框箭頭)。</p>
+                            <p className="mb-4">2. 往下滑動，選擇 <span className="font-bold text-blue-600">加入主畫面</span>。</p>
+                            <p className="mb-4 text-sm text-red-600 font-bold">3. 完成！請從桌面新出現的圖示進入，資料才會安全儲存喔！</p>
                             <button onClick={() => setShowInstallGuide(false)} className="w-full bg-slate-200 py-3 rounded-lg font-bold">我知道了</button>
                         </div>
                     </div>
@@ -354,7 +356,7 @@
                     )}
                 </div>
 
-                {/* 新增/編輯視窗 (內容保持不變) */}
+                {/* 新增/編輯視窗 */}
                 {isModalOpen && (
                     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                         <div className="bg-white w-full max-w-md rounded-xl p-4 shadow-2xl max-h-[90vh] overflow-y-auto">
@@ -363,8 +365,9 @@
                                 <button onClick={closeModal} className="text-xl">✖️</button>
                             </div>
                             <form onSubmit={handleSave} className="space-y-3">
+                                {/* --- 修改 2：車號輸入框的提示文字調整 --- */}
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="text-xs font-bold text-slate-500">車號 *</label><input required className="w-full border rounded p-2 uppercase font-bold" value={formData.plate} onChange={e=>setFormData({...formData, plate: e.target.value.toUpperCase()})} /></div>
+                                    <div><label className="text-xs font-bold text-slate-500">車號 *</label><input required className="w-full border rounded p-2 uppercase font-bold" placeholder="請輸入車牌 (例如: ABC-1234)" value={formData.plate} onChange={e=>setFormData({...formData, plate: e.target.value.toUpperCase()})} /></div>
                                     <div><label className="text-xs font-bold text-slate-500">品牌</label><input className="w-full border rounded p-2" value={formData.brand} onChange={e=>setFormData({...formData, brand: e.target.value})} /></div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
