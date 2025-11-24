@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>車隊管理系統</title>
+    <!-- iOS 專用設定 -->
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="車隊管理">
+    
+    <!-- 引入 React 和 Tailwind -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; }
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        input, select, textarea { font-size: 16px !important; } /* 防止 iOS 縮放 */
+    </style>
+</head>
+<body class="bg-slate-100 text-slate-800 h-screen flex flex-col overflow-hidden">
+
+<div id="root" class="flex flex-col h-full"></div>
+
+<script type="text/babel">
+    const { useState, useEffect, useMemo } = React;
+
+    // --- 輔助函式 ---
+    const toROCDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        const year = date.getFullYear() - 1911;
+        const month = (date.getMonth() + 1).toString().padStart(2, '0');
+        const day = date.getDate().toString().padStart(2, '0');
+        return `${year}/${month}/${day}`;
+    };
+
+    const calculateNextDate = (lastDate, cycle) => {
+        if (!lastDate || !cycle) return '';
+        const date = new Date(lastDate);
+        if (cycle === '半年') {
+            date.setMonth(date.getMonth() + 6);
+        } else {
+            date.setFullYear(date.getFullYear() + 1);
+        }
+        return date.toISOString().split('T')[0];
+    };
+
+    const calculateCycle = (vehicleYear) => {
+        if (!vehicleYear) return '一年';
+        const currentYear = new Date().getFullYear();
+        const vYear = parseInt(vehicleYear);
+        return (currentYear - vYear) > 5 ? '半年' : '一年';
+    };
+
+    const downloadCalendarEvent = (vehicle) => {
+        const nextDateStr = vehicle.nextDate.replace(/-/g, '');
+        const insuranceDateStr = vehicle.insuranceDate ? vehicle.insuranceDate.replace(/-/g, '') : null;
+        
+        let icsContent = 
+`BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//MyCompany//VehicleApp//EN
+BEGIN:VEVENT
+SUMMARY:【驗車提醒】${vehicle.plate}
+DTSTART;VALUE=DATE:${nextDateStr}
+DTEND;VALUE=DATE:${nextDateStr}
+DESCRIPTION:車牌: ${vehicle.plate}\\n週期: ${vehicle.cycle}\\n請記得安排驗車。
+BEGIN:VALARM
+TRIGGER:-P30D
+DESCRIPTION:驗車期限快到了 (30天前提醒)
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT`;
+
+        if (insuranceDateStr) {
+            icsContent += `
+BEGIN:VEVENT
+SUMMARY:【保險續保】${vehicle.plate}
+DTSTART;VALUE=DATE:${insuranceDateStr}
+DTEND;VALUE=DATE:${insuranceDateStr}
+DESCRIPTION:車牌: ${vehicle.plate}\\n保險公司: ${vehicle.insurer}\\n請記得聯絡續保。
+BEGIN:VALARM
+TRIGGER:-P30D
+DESCRIPTION:保險即將到期 (30天前提醒)
+ACTION:DISPLAY
+END:VALARM
+END:VEVENT`;
+        }
+        icsContent += `\nEND:VCALENDAR`;
+
+        const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', `${vehicle.plate}_提醒.ics`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const exportToExcel = (vehicles) => {
+        if (vehicles.length === 0) {
+            alert("目前沒有資料可以匯出喔！");
+            return;
+        }
+        if (!confirm("確定要匯出所有資料成 Excel 嗎？")) return;
+
+        const headers = ["公司群組","車牌號碼","品牌","出廠年份(西元)","噸數","驗車週期","上次驗車日","下次驗車日","狀態","保險到期日","保險公司","車主姓名","備註"];
+        const rows = vehicles.map(v => [
+            v.company, v.plate, v.brand, v.year, v.tonnage, v.cycle,
+            toROCDate(v.lastDate), toROCDate(v.nextDate), v.status,
+            toROCDate(v.insuranceDate), v.insurer, v.owner, \`"\${(v.notes || '').replace(/"/g, '""')}"\`
+        ]);
+        const csvContent = [headers.join(","), ...rows.map(row => row.join(","))].join("\n");
+        const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        const dateStr = new Date().toISOString().split('T')[0];
+        link.href = url;
+        link.setAttribute('download', \`車輛管理備份_\${dateStr}.csv\`);
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
+
+    const COMPANY_TABS = [
+        "綿豐交通有限公司（頭）", "銓豐交通有限公司（頭）", "綿豐汽車貨運行（頭）",
+        "綿豐交通有限公司（尾）", "銓豐交通有限公司（尾）", "綿豐汽車貨運行（尾）"
+    ];
+
+    function App() {
+        const [activeTab, setActiveTab] = useState(COMPANY_TABS[0]);
+        const [vehicles, setVehicles] = useState([]);
+        const [isModalOpen, setIsModalOpen] = useState(false);
+        const [editingId, setEditingId] = useState(null);
+        const [searchTerm, setSearchTerm] = useState('');
+
+        const [formData, setFormData] = useState({
+            plate: '', brand: '', year: '', tonnage: '', cycle: '一年',
+            lastDate: '', status: '完成', insuranceDate: '', insurer: '', owner: '', notes: ''
+        });
+
+        // Local Storage
+        useEffect(() => {
+            const savedData = localStorage.getItem('myVehicleData_iOS_v2');
+            if (savedData) {
+                try { setVehicles(JSON.parse(savedData)); } catch (e) { console.error(e); }
+            }
+        }, []);
+
+        useEffect(() => {
+            if (vehicles.length > 0) {
+                localStorage.setItem('myVehicleData_iOS_v2', JSON.stringify(vehicles));
+            }
+        }, [vehicles]);
+
+        const alerts = useMemo(() => {
+            const today = new Date();
+            const thirtyDaysLater = new Date();
+            thirtyDaysLater.setDate(today.getDate() + 30);
+            return vehicles.filter(v => {
+                const nextDate = new Date(v.nextDate);
+                const insDate = v.insuranceDate ? new Date(v.insuranceDate) : null;
+                return nextDate <= thirtyDaysLater || (insDate && insDate <= thirtyDaysLater) || v.status === '待驗';
+            });
+        }, [vehicles]);
+
+        const handleSave = (e) => {
+            e.preventDefault();
+            const nextDate = calculateNextDate(formData.lastDate, formData.cycle);
+            const timestamp = new Date().toISOString();
+            if (editingId) {
+                setVehicles(prev => prev.map(v => v.id === editingId ? { ...v, ...formData, nextDate, company: activeTab, updatedAt: timestamp } : v));
+            } else {
+                setVehicles(prev => [...prev, { id: Date.now().toString(), ...formData, nextDate, company: activeTab, createdAt: timestamp }]);
+            }
+            closeModal();
+        };
+
+        const handleDelete = (id) => {
+            if (window.confirm('確定要刪除這筆資料嗎？刪除後無法復原喔！')) {
+                const newVehicles = vehicles.filter(v => v.id !== id);
+                setVehicles(newVehicles);
+                if (newVehicles.length === 0) localStorage.removeItem('myVehicleData_iOS_v2');
+            }
+        };
+
+        const openAddModal = () => {
+            setFormData({ plate: '', brand: '', year: '', tonnage: '', cycle: '一年', lastDate: '', status: '完成', insuranceDate: '', insurer: '', owner: '', notes: '' });
+            setEditingId(null);
+            setIsModalOpen(true);
+        };
+
+        const openEditModal = (vehicle) => {
+            setFormData({ ...vehicle });
+            setEditingId(vehicle.id);
+            setIsModalOpen(true);
+        };
+
+        const closeModal = () => {
+            setIsModalOpen(false);
+            setEditingId(null);
+        };
+
+        const handleYearChange = (e) => {
+            const val = e.target.value;
+            setFormData(prev => ({ ...prev, year: val, cycle: calculateCycle(val) }));
+        };
+
+        const sortedVehicles = useMemo(() => {
+            return vehicles
+                .filter(v => v.company === activeTab)
+                .filter(v => v.plate.toLowerCase().includes(searchTerm.toLowerCase()))
+                .sort((a, b) => {
+                    const today = new Date();
+                    const thirtyDaysLater = new Date();
+                    thirtyDaysLater.setDate(today.getDate() + 30);
+                    
+                    const aDue = new Date(a.nextDate) <= thirtyDaysLater;
+                    const bDue = new Date(b.nextDate) <= thirtyDaysLater;
+
+                    if (a.status === '待驗' && b.status !== '待驗') return -1;
+                    if (a.status !== '待驗' && b.status === '待驗') return 1;
+                    if (aDue && !bDue) return -1;
+                    if (!aDue && bDue) return 1;
+                    return a.plate.localeCompare(b.plate);
+                });
+        }, [vehicles, activeTab, searchTerm]);
+
+        return (
+            <div className="flex flex-col h-full">
+                {/* Header */}
+                <div className="bg-blue-900 text-white shadow-md p-4 sticky top-0 z-10">
+                    <div className="flex justify-between items-center mb-3">
+                        <div className="flex items-center gap-2">
+                            <span className="text-2xl">🚛</span>
+                            <div>
+                                <h1 className="text-lg font-bold tracking-wide">老闆的車管 APP</h1>
+                                <div className="text-[10px] text-blue-200">iOS 離線版 + Excel 匯出</div>
+                            </div>
+                        </div>
+                        <div className="flex gap-2">
+                            <button onClick={() => exportToExcel(vehicles)} className="bg-green-600 px-3 py-2 rounded-full text-xs font-bold shadow flex items-center gap-1">
+                                📊 匯出
+                            </button>
+                            <button onClick={openAddModal} className="bg-yellow-500 text-blue-900 px-4 py-2 rounded-full font-bold shadow">
+                                ➕ 新增
+                            </button>
+                        </div>
+                    </div>
+
+                    {alerts.length > 0 && (
+                        <div className="mb-3 bg-red-600 rounded-lg p-2 flex items-center gap-2 text-xs text-white animate-pulse">
+                            <span>⚠️</span>
+                            <span className="font-bold">注意：有 {alerts.length} 台車輛需要在 30 天內處理！</span>
+                        </div>
+                    )}
+
+                    <div className="space-y-2">
+                        <input type="text" placeholder="🔍 搜尋車牌..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                            className="w-full bg-blue-800/50 text-white placeholder-blue-300 rounded-lg px-4 py-2 focus:outline-none text-sm" />
+                        
+                        <div className="flex overflow-x-auto pb-2 gap-2 hide-scrollbar">
+                            {COMPANY_TABS.map(tab => (
+                                <button key={tab} onClick={() => setActiveTab(tab)}
+                                    className={`whitespace-nowrap px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                                        activeTab === tab ? 'bg-white text-blue-900 shadow-md' : 'bg-blue-800/40 text-blue-100'
+                                    }`}>
+                                    {tab.replace(/有限公司|汽車貨運行/g, '')}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+
+                {/* Main Content */}
+                <div className="flex-1 overflow-y-auto p-4 pb-20 bg-slate-100">
+                    {sortedVehicles.length === 0 ? (
+                        <div className="text-center py-10 text-slate-400 bg-white rounded-xl border border-dashed shadow-sm">
+                            <div className="text-4xl mb-2">🚛</div>
+                            <p>目前沒有資料</p>
+                            <p className="text-sm">點擊右上角「➕」開始新增</p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-4 md:grid-cols-2">
+                            {sortedVehicles.map(vehicle => {
+                                const today = new Date();
+                                const limitDate = new Date();
+                                limitDate.setDate(today.getDate() + 30);
+                                const isExpireSoon = new Date(vehicle.nextDate) <= limitDate;
+                                const isInsExpireSoon = vehicle.insuranceDate && new Date(vehicle.insuranceDate) <= limitDate;
+
+                                return (
+                                    <div key={vehicle.id} className={`bg-white rounded-xl shadow-sm border overflow-hidden relative ${
+                                        vehicle.status === '待驗' ? 'border-l-4 border-l-red-500' : 
+                                        (isExpireSoon || isInsExpireSoon) ? 'border-l-4 border-l-orange-400' : 'border-l-4 border-l-green-500'
+                                    }`}>
+                                        <div className="p-4 border-b border-slate-100 flex justify-between items-start">
+                                            <div>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="text-xl font-bold text-slate-800">{vehicle.plate}</span>
+                                                    {vehicle.status === '待驗' && <span className="bg-red-100 text-red-600 text-xs px-2 py-1 rounded-full font-bold">待驗</span>}
+                                                </div>
+                                                <div className="text-sm text-slate-500 mt-1">
+                                                    <span className="bg-slate-100 px-2 py-0.5 rounded mr-1">{vehicle.brand}</span>
+                                                    <span>{vehicle.year}年 ({vehicle.cycle})</span>
+                                                </div>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button onClick={() => openEditModal(vehicle)} className="text-slate-400 hover:text-blue-600">✏️</button>
+                                                <button onClick={() => handleDelete(vehicle.id)} className="text-slate-400 hover:text-red-600">🗑️</button>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-4 text-sm space-y-3">
+                                            <div className="bg-slate-50 p-2 rounded flex justify-between items-center">
+                                                <div>
+                                                    <div className="text-xs text-slate-400">下次驗車</div>
+                                                    <div className={`font-bold text-lg ${vehicle.status === '待驗' || isExpireSoon ? 'text-red-600' : 'text-slate-700'}`}>
+                                                        📅 {toROCDate(vehicle.nextDate)}
+                                                    </div>
+                                                </div>
+                                                {isExpireSoon && <span className="text-xs text-red-600 bg-red-100 px-2 py-1 rounded font-bold animate-pulse">即將到期</span>}
+                                            </div>
+
+                                            <div className="flex justify-between items-center px-1">
+                                                <div className="flex items-center gap-2">
+                                                    <span>🛡️</span>
+                                                    <div>
+                                                        <div className="text-xs text-slate-400">保險到期 ({vehicle.insurer || '未填'})</div>
+                                                        <div className={`font-medium ${isInsExpireSoon ? 'text-red-600 font-bold' : ''}`}>
+                                                            {toROCDate(vehicle.insuranceDate) || '未填寫'}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                                {isInsExpireSoon && <span className="text-xs text-white bg-red-500 px-2 py-1 rounded font-bold">需續保</span>}
+                                            </div>
+
+                                            {vehicle.notes && (
+                                                <div className="bg-yellow-50 text-yellow-800 p-2 rounded text-xs border border-yellow-100">
+                                                    <span className="font-bold">備註:</span> {vehicle.notes}
+                                                </div>
+                                            )}
+
+                                            <button onClick={() => downloadCalendarEvent(vehicle)} className="w-full bg-blue-50 text-blue-700 py-2 rounded-lg font-bold text-xs border border-blue-200 mt-2">
+                                                🔔 加入行事曆提醒 (提早30天)
+                                            </button>
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </div>
+
+                {/* Modal */}
+                {isModalOpen && (
+                    <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                        <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl flex flex-col">
+                            <div className="p-4 border-b flex justify-between items-center sticky top-0 bg-white">
+                                <h3 className="text-lg font-bold">{editingId ? '編輯車輛' : '新增車輛'}</h3>
+                                <button onClick={closeModal} className="text-slate-500 text-xl">✖️</button>
+                            </div>
+                            <form onSubmit={handleSave} className="p-6 space-y-4">
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className="text-sm font-bold">車牌號碼 *</label><input required type="text" className="w-full border rounded p-2 uppercase" value={formData.plate} onChange={e => setFormData({...formData, plate: e.target.value.toUpperCase()})} /></div>
+                                    <div><label className="text-sm font-bold">品牌</label><input type="text" className="w-full border rounded p-2" value={formData.brand} onChange={e => setFormData({...formData, brand: e.target.value})} /></div>
+                                </div>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div><label className="text-sm font-bold">年份 (西元) *</label><input required type="number" className="w-full border rounded p-2" value={formData.year} onChange={handleYearChange} /><div className="text-xs text-blue-600">系統：{formData.cycle}驗一次</div></div>
+                                    <div><label className="text-sm font-bold">噸數</label><input type="number" className="w-full border rounded p-2" value={formData.tonnage} onChange={e => setFormData({...formData, tonnage: e.target.value})} /></div>
+                                </div>
+                                <div className="bg-slate-50 p-4 rounded border">
+                                    <label className="text-sm font-bold">上次驗車日期 *</label><input required type="date" className="w-full border rounded p-2 mb-3" value={formData.lastDate} onChange={e => setFormData({...formData, lastDate: e.target.value})} />
+                                    <div className="flex gap-2">
+                                        {['完成', '待驗'].map(status => (
+                                            <button key={status} type="button" onClick={() => setFormData({...formData, status})} className={`flex-1 py-2 rounded text-sm font-bold ${formData.status === status ? (status === '完成' ? 'bg-green-500 text-white' : 'bg-red-500 text-white') : 'bg-white border'}`}>{status}</button>
+                                        ))}
+                                    </div>
+                                </div>
+                                <div className="bg-green-50 p-4 rounded border border-green-100">
+                                    <div className="mb-2"><label className="text-sm font-bold text-green-800">保險到期日</label><input type="date" className="w-full border rounded p-2" value={formData.insuranceDate} onChange={e => setFormData({...formData, insuranceDate: e.target.value})} /></div>
+                                    <div><label className="text-sm font-bold text-green-800">保險公司</label><input type="text" className="w-full border rounded p-2" value={formData.insurer} onChange={e => setFormData({...formData, insurer: e.target.value})} /></div>
+                                </div>
+                                <div><label className="text-sm font-bold">備註</label><textarea className="w-full border rounded p-2" value={formData.notes} onChange={e => setFormData({...formData, notes: e.target.value})}>
