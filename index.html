@@ -73,9 +73,18 @@
         return date.toISOString().split('T')[0];
     };
 
-    const calculateCycle = (vehicleYear) => {
+    // --- 核心修改：驗車週期判斷 ---
+    const calculateCycle = (vehicleYear, company) => {
+        // 如果是尾車，固定一年驗
+        if (company && company.includes('(尾)')) {
+            return '一年';
+        }
+        
+        // 如果是頭車，依照年份判斷
         if (!vehicleYear) return '一年';
-        return (new Date().getFullYear() - parseInt(vehicleYear)) > 5 ? '半年' : '一年';
+        const currentYear = new Date().getFullYear();
+        const vYear = parseInt(vehicleYear);
+        return (currentYear - vYear) > 5 ? '半年' : '一年';
     };
 
     const downloadCalendarEvent = (vehicle) => {
@@ -90,7 +99,7 @@
         document.body.removeChild(link);
     };
 
-    // 匯出 Excel (修改版：根據車頭/尾整合顯示)
+    // 匯出 Excel
     const exportToExcel = (vehicles) => {
         if (vehicles.length === 0 || !confirm("確定匯出報表？")) return;
         
@@ -155,7 +164,7 @@
             company: COMPANY_LIST[0], 
             plate: '', brand: '', year: '', tonnage: '', cycle: '一年', lastDate: '', status: '完成', 
             insuranceDate: '', insurer: '', 
-            trailerType: '', // 新增：車尾型式
+            trailerType: '',
             passName: '', passDate: '', passFile: '', passFileName: '', owner: '', notes: '',
             specialStatus: '無', specialDateStart: '', specialDateEnd: ''
         });
@@ -295,9 +304,11 @@
                 setEditingId(v.id); 
             } else { 
                 const defaultCompany = COMPANY_LIST.includes(activeTab) ? activeTab : COMPANY_LIST[0];
+                const defaultCycle = defaultCompany.includes('(尾)') ? '一年' : '一年';
+                
                 setFormData({ 
                     company: defaultCompany,
-                    plate: '', brand: '', year: '', tonnage: '', cycle: '一年', lastDate: '', status: '完成', 
+                    plate: '', brand: '', year: '', tonnage: '', cycle: defaultCycle, lastDate: '', status: '完成', 
                     insuranceDate: '', insurer: '', trailerType: '',
                     passName: '', passDate: '', passFile: '', passFileName: '', owner: '', notes: '',
                     specialStatus: '無', specialDateStart: '', specialDateEnd: ''
@@ -441,7 +452,6 @@
                                             <div className={`font-bold text-base ${!isInactive && (v.status==='待驗'||isInspExp)?'text-red-600':''}`}>📅 {toROCDate(v.nextDate)}</div>
                                         </div>
                                         
-                                        {/* 核心邏輯：尾車顯示型式，頭車顯示保險 */}
                                         {isTrailer ? (
                                             <div className="bg-blue-50 p-2 rounded border border-blue-100">
                                                 <div className="text-[10px] text-blue-700">車尾型式</div>
@@ -493,7 +503,15 @@
                             </div>
                             <form onSubmit={handleSave} className="space-y-3">
                                 <div><label className="text-xs font-bold text-slate-500">所屬公司</label>
-                                    <select className="w-full border rounded p-2 bg-white" value={formData.company} onChange={e => setFormData({...formData, company: e.target.value})}>
+                                    <select className="w-full border rounded p-2 bg-white" value={formData.company} 
+                                        onChange={e => {
+                                            const c = e.target.value;
+                                            setFormData({
+                                                ...formData, 
+                                                company: c,
+                                                cycle: calculateCycle(formData.year, c)
+                                            });
+                                        }}>
                                         {COMPANY_LIST.map(c => <option key={c} value={c}>{c}</option>)}
                                     </select>
                                 </div>
@@ -502,7 +520,19 @@
                                     <div><label className="text-xs font-bold text-slate-500">品牌</label><input className="w-full border rounded p-2" value={formData.brand} onChange={e=>setFormData({...formData, brand: e.target.value})} /></div>
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
-                                    <div><label className="text-xs font-bold text-slate-500">年份(西元)*</label><input required type="number" className="w-full border rounded p-2" value={formData.year} onChange={e=>{const y=e.target.value;setFormData({...formData, year:y, cycle: (new Date().getFullYear()-y)>5?'半年':'一年'})}} /></div>
+                                    <div>
+                                        <label className="text-xs font-bold text-slate-500">年份(西元)*</label>
+                                        <input required type="number" className="w-full border rounded p-2" value={formData.year} 
+                                            onChange={e=>{
+                                                const y=e.target.value;
+                                                setFormData({
+                                                    ...formData, 
+                                                    year: y, 
+                                                    cycle: calculateCycle(y, formData.company)
+                                                });
+                                            }} 
+                                        />
+                                    </div>
                                     <div>
                                         <label className="text-xs font-bold text-slate-500">{formData.company.includes('(尾)') ? '車尾規格' : '噸數'}</label>
                                         {formData.company.includes('(尾)') ? (
@@ -539,18 +569,11 @@
                                 
                                 {/* --- 核心修改：動態顯示保險區塊 或 車尾型式區塊 --- */}
                                 {formData.company.includes('(尾)') ? (
-                                    // 如果是尾車，顯示藍色「車尾型式」輸入框
                                     <div className="bg-blue-50 p-3 rounded border border-blue-100">
                                         <label className="text-xs font-bold text-blue-800">車尾型式</label>
-                                        <input 
-                                            className="w-full border rounded p-2 mt-1" 
-                                            placeholder="例如：平板式、凹型平板式" 
-                                            value={formData.trailerType} 
-                                            onChange={e=>setFormData({...formData, trailerType: e.target.value})} 
-                                        />
+                                        <input className="w-full border rounded p-2 mt-1" placeholder="例如：平板式、凹型平板式" value={formData.trailerType} onChange={e=>setFormData({...formData, trailerType: e.target.value})} />
                                     </div>
                                 ) : (
-                                    // 如果是頭車，顯示原本的綠色「保險」區塊
                                     <div className="bg-green-50 p-3 rounded border border-green-100">
                                         <div className="space-y-3">
                                             <div><label className="text-xs font-bold text-green-800">保險到期</label><input type="date" className="w-full border rounded p-2 mt-1" value={formData.insuranceDate} onChange={e=>setFormData({...formData, insuranceDate: e.target.value})} /></div>
