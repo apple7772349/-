@@ -170,6 +170,23 @@
             }
         }, [vehicles]);
 
+        // --- 核心功能：保險一鍵續保 ---
+        const handleRenewInsurance = (id, currentDate) => {
+            if (!currentDate) return alert("目前沒有保險日期，請先點擊編輯設定。");
+            
+            if (confirm(`確定要將這台車的保險「自動續保一年」嗎？\n\n原到期日：${toROCDate(currentDate)}`)) {
+                const date = new Date(currentDate);
+                date.setFullYear(date.getFullYear() + 1); // 加一年
+                const newDateStr = date.toISOString().split('T')[0];
+                
+                setVehicles(prev => prev.map(v => v.id === id ? { 
+                    ...v, 
+                    insuranceDate: newDateStr, 
+                    updatedAt: new Date().toISOString() 
+                } : v));
+            }
+        };
+
         const handleImport = (event) => {
             const file = event.target.files[0];
             if (!file) return;
@@ -256,7 +273,6 @@
                 setVehicles(prev => [...prev, { ...newItem, id: Date.now().toString(), createdAt: new Date().toISOString() }]);
             }
             
-            // 自動跳轉：有特殊狀態跳去該狀態分頁；無狀態則跳回公司分頁
             if (newItem.specialStatus !== '無') {
                 setActiveTab(newItem.specialStatus);
             } else {
@@ -279,7 +295,6 @@
                 setFormData({...v}); 
                 setEditingId(v.id); 
             } else { 
-                // 新增時，如果當前分頁是公司，預設該公司；如果是特殊狀態分頁，預設第一家公司
                 const defaultCompany = COMPANY_LIST.includes(activeTab) ? activeTab : COMPANY_LIST[0];
                 setFormData({ 
                     company: defaultCompany,
@@ -294,13 +309,22 @@
 
         const closeModal = () => setIsModalOpen(false);
 
+        // --- 核心功能：多欄位搜尋 ---
         const sortedVehicles = useMemo(() => {
+            const term = searchTerm.toUpperCase();
             return vehicles.filter(v => {
+                // 搜尋條件：車號 OR 車主 OR 年份 OR 噸數
+                const matchSearch = 
+                    v.plate.includes(term) || 
+                    (v.owner && v.owner.includes(term)) ||
+                    (v.year && v.year.toString().includes(term)) ||
+                    (v.tonnage && v.tonnage.toString().includes(term));
+
                 const isSpecialTab = SPECIAL_STATUS_LIST.includes(activeTab);
                 if (isSpecialTab) {
-                    return v.specialStatus === activeTab && v.plate.includes(searchTerm.toUpperCase());
+                    return v.specialStatus === activeTab && matchSearch;
                 } else {
-                    return v.company === activeTab && (v.specialStatus === '無' || !v.specialStatus) && v.plate.includes(searchTerm.toUpperCase());
+                    return v.company === activeTab && (v.specialStatus === '無' || !v.specialStatus) && matchSearch;
                 }
             }).sort((a, b) => {
                 if (a.status === '待驗' && b.status !== '待驗') return -1;
@@ -327,6 +351,7 @@
                     </div>
                 )}
 
+                {/* 頂部導航 */}
                 <div className="bg-blue-900 text-white p-3 shadow-lg z-10 w-full">
                     <div className="flex justify-between items-center mb-2">
                         <div className="flex items-center gap-1 shrink-0">
@@ -348,7 +373,7 @@
                     )}
 
                     <div className="space-y-2 w-full">
-                        <input type="text" placeholder="🔍 搜尋車牌..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
+                        <input type="text" placeholder="🔍 搜尋車牌、車主、年份、噸數..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
                             className="w-full bg-blue-800/50 text-white placeholder-blue-300 rounded px-3 py-2 text-sm outline-none" />
                         <div className="flex overflow-x-auto gap-2 hide-scrollbar pb-1 w-full">
                             {ALL_TABS.map(tab => {
@@ -372,6 +397,7 @@
                     </div>
                 </div>
 
+                {/* 主要內容 */}
                 <div className="flex-1 overflow-y-auto p-3 space-y-3 pb-20 w-full">
                     {sortedVehicles.length === 0 ? (
                         <div className="text-center py-10 text-slate-400">
@@ -416,9 +442,21 @@
                                             <div className="text-[10px] text-slate-400 flex justify-between"><span>下次驗車</span><span className="text-[9px]">{toROCDate(v.lastDate)}</span></div>
                                             <div className={`font-bold text-base ${!isInactive && (v.status==='待驗'||isInspExp)?'text-red-600':''}`}>📅 {toROCDate(v.nextDate)}</div>
                                         </div>
-                                        <div className="bg-green-50 p-2 rounded border border-green-100">
-                                            <div className="text-[10px] text-green-700 flex justify-between"><span>保險到期</span><span className="text-[9px]">{v.insurer}</span></div>
-                                            <div className="font-bold text-base text-slate-700">🛡️ {toROCDate(v.insuranceDate) || '--'}</div>
+                                        {/* 保險區塊 (新增「已續」按鈕) */}
+                                        <div className="bg-green-50 p-2 rounded border border-green-100 relative">
+                                            <div className="text-[10px] text-green-700 flex justify-between items-center">
+                                                <span>保險到期</span>
+                                                <span className="text-[9px]">{v.insurer}</span>
+                                            </div>
+                                            <div className="flex justify-between items-end mt-1">
+                                                <div className="font-bold text-base text-slate-700">🛡️ {toROCDate(v.insuranceDate) || '--'}</div>
+                                                <button 
+                                                    onClick={() => handleRenewInsurance(v.id, v.insuranceDate)}
+                                                    className="bg-green-600 text-white text-[10px] px-2 py-1 rounded shadow hover:bg-green-700"
+                                                >
+                                                    已續
+                                                </button>
+                                            </div>
                                         </div>
                                         {(v.passName || v.passDate || v.passFile) && (
                                             <div className="col-span-2 bg-purple-50 p-2 rounded border border-purple-100 flex flex-col gap-1">
