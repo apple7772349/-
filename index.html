@@ -73,7 +73,6 @@
         return date.toISOString().split('T')[0];
     };
 
-    // 核心修改：驗車週期判斷
     const calculateCycle = (vehicleYear, company) => {
         if (company && company.includes('(尾)')) {
             return '一年';
@@ -167,7 +166,34 @@
         useEffect(() => {
             try {
                 const savedData = localStorage.getItem('myVehicleData_iOS_v2');
-                if (savedData) setVehicles(JSON.parse(savedData));
+                if (savedData) {
+                    const parsedData = JSON.parse(savedData);
+                    
+                    // 自動檢查邏輯 (30天內轉待驗)
+                    const today = new Date();
+                    today.setHours(0,0,0,0);
+                    let hasAutoUpdate = false;
+
+                    const checkedData = parsedData.map(v => {
+                        if (v.specialStatus && v.specialStatus !== '無') return v;
+                        if (v.status === '完成' && v.nextDate) {
+                            const nextDate = new Date(v.nextDate);
+                            const diffTime = nextDate - today;
+                            const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                            
+                            if (diffDays <= 30) {
+                                hasAutoUpdate = true;
+                                return { ...v, status: '待驗' };
+                            }
+                        }
+                        return v;
+                    });
+
+                    setVehicles(checkedData);
+                    if (hasAutoUpdate) {
+                        localStorage.setItem('myVehicleData_iOS_v2', JSON.stringify(checkedData));
+                    }
+                }
             } catch (e) {}
         }, []);
 
@@ -246,6 +272,7 @@
             if(passFileInputRef.current) passFileInputRef.current.value = '';
         };
 
+        // --- 核心修改：警示邏輯 ---
         const alerts = useMemo(() => {
             const limit = new Date();
             limit.setDate(limit.getDate() + 30);
@@ -315,11 +342,9 @@
 
         const closeModal = () => setIsModalOpen(false);
 
-        // --- 核心修改：全域搜尋 ---
         const sortedVehicles = useMemo(() => {
             const term = searchTerm.trim().toUpperCase();
             
-            // 1. 搜尋模式：忽略分頁，搜尋全部
             if (term) {
                 return vehicles.filter(v => {
                     const matchSearch = 
@@ -336,7 +361,6 @@
                 });
             }
 
-            // 2. 一般模式：依照分頁過濾
             return vehicles.filter(v => {
                 const isSpecialTab = SPECIAL_STATUS_LIST.includes(activeTab);
                 if (isSpecialTab) {
@@ -392,33 +416,25 @@
                     <div className="space-y-2 w-full">
                         <input type="text" placeholder="🔍 搜尋車牌、車主、年份、噸數..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value.toUpperCase())}
                             className="w-full bg-blue-800/50 text-white placeholder-blue-300 rounded px-3 py-2 text-sm outline-none" />
-                        
-                        {/* 如果正在搜尋，顯示提示文字；否則顯示分頁 */}
-                        {searchTerm.trim() ? (
-                            <div className="text-center text-xs text-yellow-300 font-bold py-1">
-                                🔎 正在搜尋全部車輛... (清空搜尋欄即可返回分頁)
-                            </div>
-                        ) : (
-                            <div className="flex overflow-x-auto gap-2 hide-scrollbar pb-1 w-full">
-                                {ALL_TABS.map(tab => {
-                                    const isSpecial = SPECIAL_STATUS_LIST.includes(tab);
-                                    const count = vehicles.filter(v => {
-                                        if (isSpecial) return v.specialStatus === tab;
-                                        return v.company === tab && (v.specialStatus === '無' || !v.specialStatus);
-                                    }).length;
-                                    return (
-                                        <button key={tab} onClick={() => setActiveTab(tab)}
-                                            className={`whitespace-nowrap px-3 py-1.5 rounded text-xs font-bold transition-colors flex-shrink-0 border ${
-                                                activeTab === tab 
-                                                ? 'bg-white text-blue-900 border-white' 
-                                                : (isSpecial ? 'bg-gray-700 text-gray-200 border-gray-600' : 'bg-blue-800/40 text-blue-100 border-blue-800')
-                                            }`}>
-                                            {tab} <span className="ml-1 opacity-80">({count})</span>
-                                        </button>
-                                    );
-                                })}
-                            </div>
-                        )}
+                        <div className="flex overflow-x-auto gap-2 hide-scrollbar pb-1 w-full">
+                            {ALL_TABS.map(tab => {
+                                const isSpecial = SPECIAL_STATUS_LIST.includes(tab);
+                                const count = vehicles.filter(v => {
+                                    if (isSpecial) return v.specialStatus === tab;
+                                    return v.company === tab && (v.specialStatus === '無' || !v.specialStatus);
+                                }).length;
+                                return (
+                                    <button key={tab} onClick={() => setActiveTab(tab)}
+                                        className={`whitespace-nowrap px-3 py-1.5 rounded text-xs font-bold transition-colors flex-shrink-0 border ${
+                                            activeTab === tab 
+                                            ? 'bg-white text-blue-900 border-white' 
+                                            : (isSpecial ? 'bg-gray-700 text-gray-200 border-gray-600' : 'bg-blue-800/40 text-blue-100 border-blue-800')
+                                        }`}>
+                                        {tab} <span className="ml-1 opacity-80">({count})</span>
+                                    </button>
+                                );
+                            })}
+                        </div>
                     </div>
                 </div>
 
@@ -431,21 +447,53 @@
                         </div>
                     ) : (
                         sortedVehicles.map(v => {
-                            const limit = new Date(); limit.setDate(limit.getDate()+30);
-                            const isInspExp = new Date(v.nextDate) <= limit;
-                            const isInsExp = v.insuranceDate && new Date(v.insuranceDate) <= limit;
-                            const isPassExp = v.passDate && new Date(v.passDate) <= limit;
-                            const isCritical = v.status === '待驗' || isInspExp || isInsExp || isPassExp;
+                            // --- 核心修改：計算逾檢日期與顏色邏輯 ---
+                            const today = new Date();
+                            today.setHours(0,0,0,0);
+                            const nextDate = new Date(v.nextDate);
+                            // 計算已過天數 (nextDate 之後幾天)
+                            const daysPassed = Math.ceil((today - nextDate) / (1000 * 60 * 60 * 24));
+                            
                             const isInactive = v.specialStatus === '報廢' || v.specialStatus === '過戶' || v.specialStatus === '停駛' || v.specialStatus === '扣牌';
+                            
+                            // 狀態判斷
+                            let statusColorClass = 'border-green-500';
+                            let statusText = null;
+
+                            if (isInactive) {
+                                statusColorClass = 'border-gray-400 opacity-70 grayscale';
+                            } else {
+                                if (daysPassed > 30) {
+                                    // 已逾檢 (超過30天) -> 黑色
+                                    statusColorClass = 'border-gray-800 border-l-8 bg-red-50';
+                                    statusText = <span className="bg-black text-white text-[10px] px-2 py-0.5 rounded font-bold animate-pulse">🚫 已逾檢 {daysPassed-30} 天</span>;
+                                } else if (daysPassed >= 20) {
+                                    // 快逾檢 (20~30天) -> 紫色
+                                    statusColorClass = 'border-purple-600 border-l-8 bg-purple-50';
+                                    statusText = <span className="bg-purple-600 text-white text-[10px] px-2 py-0.5 rounded font-bold animate-bounce">⚠️ 快逾檢 (剩{30-daysPassed}天)</span>;
+                                } else if (v.status === '待驗' || daysPassed >= 0) {
+                                    // 待驗 或 已過期但未滿20天 -> 紅色
+                                    statusColorClass = 'border-red-500';
+                                    statusText = <span className="bg-red-100 text-red-600 text-[10px] px-1.5 py-0.5 rounded font-bold">待驗</span>;
+                                } else if (daysPassed >= -30) {
+                                    // 快到了 (前30天) -> 橘色
+                                    statusColorClass = 'border-orange-400';
+                                }
+                            }
+
+                            // 判斷其他到期
+                            const isInsExp = v.insuranceDate && new Date(v.insuranceDate) <= new Date(new Date().setDate(new Date().getDate()+30));
+                            const isPassExp = v.passDate && new Date(v.passDate) <= new Date(new Date().setDate(new Date().getDate()+30));
                             const isTrailer = v.company && v.company.includes('(尾)');
 
                             return (
-                                <div key={v.id} className={`bg-white rounded-lg shadow p-3 border-l-4 ${isInactive ? 'border-gray-400' : (isCritical ? (v.status==='待驗'?'border-red-500':'border-orange-400') : 'border-green-500')}`}>
+                                <div key={v.id} className={`bg-white rounded-lg shadow p-3 border-l-4 ${statusColorClass}`}>
                                     <div className="flex justify-between items-start mb-2 border-b pb-2">
                                         <div>
-                                            <div className="flex items-center gap-2">
+                                            <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="text-xl font-bold text-slate-800">{v.plate}</span>
-                                                {v.status === '待驗' && !isInactive && <span className="bg-red-100 text-red-600 text-[10px] px-1.5 py-0.5 rounded font-bold">待驗</span>}
+                                                {/* 顯示狀態標籤 */}
+                                                {statusText}
                                                 {v.specialStatus && v.specialStatus !== '無' && <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-gray-200 text-gray-600">{v.specialStatus}</span>}
                                             </div>
                                             <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-2">
@@ -454,7 +502,6 @@
                                                 <span>{v.tonnage ? v.tonnage+'噸' : '-噸'}</span>
                                             </div>
                                             <div className="text-sm font-bold text-blue-800 mt-1">👤 {v.owner || '未填車主'}</div>
-                                            {/* 搜尋模式下顯示所屬公司，或特殊狀態分頁也顯示 */}
                                             {(searchTerm.trim() || SPECIAL_STATUS_LIST.includes(activeTab)) && (
                                                 <div className="text-xs text-gray-400 mt-1">所屬: {v.company}</div>
                                             )}
@@ -468,7 +515,7 @@
                                     <div className="grid grid-cols-2 gap-2 text-sm mt-2">
                                         <div className="bg-slate-50 p-2 rounded border border-slate-100">
                                             <div className="text-[10px] text-slate-400 flex justify-between"><span>下次驗車</span><span className="text-[9px]">{toROCDate(v.lastDate)}</span></div>
-                                            <div className={`font-bold text-base ${!isInactive && (v.status==='待驗'||isInspExp)?'text-red-600':''}`}>📅 {toROCDate(v.nextDate)}</div>
+                                            <div className={`font-bold text-base ${!isInactive && (v.status==='待驗' || daysPassed >= 0) ? 'text-red-600' : ''}`}>📅 {toROCDate(v.nextDate)}</div>
                                         </div>
                                         
                                         {isTrailer ? (
