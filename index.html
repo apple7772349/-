@@ -101,11 +101,20 @@
 
     const exportToExcel = (vehicles) => {
         if (vehicles.length === 0 || !confirm("確定匯出報表？")) return;
-        const headers = ["公司","車號","品牌","年份","噸數/規格","上次驗車日","保險到期日","保險/車尾型式","車主","備註"];
+        const headers = ["公司","車號","品牌","年份","噸數/規格","上次驗車日","保險到期日","保險/車尾型式","車主","特殊狀態","狀態日期","備註"];
         const rows = vehicles.map(v => {
             const isTrailer = v.company && v.company.includes('(尾)');
             const insuranceOrType = isTrailer ? (v.trailerType || '') : (v.insurer || '');
-            return [v.company, v.plate, v.brand, v.year, v.tonnage, toROCDate(v.lastDate), toROCDate(v.insuranceDate), insuranceOrType, v.owner, v.notes];
+            
+            // 處理特殊狀態日期顯示
+            let specialDateStr = '';
+            if (v.specialStatus === '扣牌' || v.specialStatus === '停駛') {
+                specialDateStr = `${toROCDate(v.specialDateStart)} ~ ${toROCDate(v.specialDateEnd)}`;
+            } else if (v.specialStatus !== '無') {
+                specialDateStr = toROCDate(v.specialDateStart);
+            }
+
+            return [v.company, v.plate, v.brand, v.year, v.tonnage, toROCDate(v.lastDate), toROCDate(v.insuranceDate), insuranceOrType, v.owner, v.specialStatus || '', specialDateStr, v.notes];
         });
         const csvContent = ["\ufeff" + headers.join(",")].concat(rows.map(row => row.map(f => `"${(f||'').toString().replace(/"/g,'""')}"`).join(","))).join("\n");
         const link = document.createElement('a');
@@ -129,7 +138,8 @@
     };
 
     const COMPANY_LIST = ["綿豐(頭)", "銓豐(頭)", "綿豐貨運(頭)", "綿豐(尾)", "銓豐(尾)", "綿豐貨運(尾)"];
-    const SPECIAL_STATUS_LIST = ["停駛", "扣牌", "報廢", "過戶"];
+    // 修改：新增 "牌照註銷" 到特殊狀態列表
+    const SPECIAL_STATUS_LIST = ["停駛", "扣牌", "報廢", "過戶", "牌照註銷"];
     const SPECIAL_STATUS_OPTIONS = ["無", ...SPECIAL_STATUS_LIST];
 
     function App() {
@@ -140,7 +150,7 @@
         const [searchTerm, setSearchTerm] = useState('');
         const [showInstallGuide, setShowInstallGuide] = useState(false);
         const [filterType, setFilterType] = useState('ALL');
-        const [toast, setToast] = useState(null); // Toast 訊息狀態
+        const [toast, setToast] = useState(null);
         const fileInputRef = useRef(null);
         const passFileInputRef = useRef(null); 
 
@@ -150,15 +160,12 @@
             specialStatus: '無', specialDateStart: '', specialDateEnd: ''
         });
 
-        // 顯示 Toast 訊息
         const showToast = (message) => {
             setToast(message);
             setTimeout(() => setToast(null), 2000);
         };
 
-        // 複製車牌功能
         const handleCopyPlate = (plate) => {
-            // 建立一個隱藏的 textarea 來執行複製
             const textArea = document.createElement("textarea");
             textArea.value = plate;
             document.body.appendChild(textArea);
@@ -167,17 +174,16 @@
                 document.execCommand('copy');
                 showToast(`已複製車號：${plate}`);
             } catch (err) {
-                console.error('複製失敗', err);
-                // 如果 execCommand 失敗，嘗試使用 navigator.clipboard (部分舊瀏覽器可能不支援)
                 if (navigator.clipboard) {
-                    navigator.clipboard.writeText(plate).then(() => showToast(`已複製車號：${plate}`)).catch(() => alert("複製失敗，請手動複製"));
+                    navigator.clipboard.writeText(plate).then(() => showToast(`已複製車號：${plate}`)).catch(() => alert("複製失敗"));
                 } else {
-                    alert("您的手機不支援一鍵複製，請長按文字複製");
+                    alert("手機不支援一鍵複製");
                 }
             }
             document.body.removeChild(textArea);
         };
 
+        // --- 核心修改：讀取時自動檢查「停駛過期」與「驗車過期」 ---
         useEffect(() => {
             try {
                 const savedData = localStorage.getItem('myVehicleData_iOS_v2');
@@ -186,8 +192,26 @@
                     const today = new Date();
                     today.setHours(0,0,0,0);
                     let hasAutoUpdate = false;
+
                     const checkedData = parsedData.map(v => {
-                        if (v.specialStatus && v.specialStatus !== '無') return v;
+                        // 1. 檢查停駛是否超過6個月 -> 自動轉為牌照註銷
+                        if (v.specialStatus === '停駛' && v.specialDateEnd) {
+                            const endDate = new Date(v.specialDateEnd);
+                            // 如果今天已經超過了復駛期限
+                            if (today > endDate) {
+                                hasAutoUpdate = true;
+                                return { 
+                                    ...v, 
+                                    specialStatus: '牌照註銷',
+                                    // 可以在備註加註，讓老闆知道是自動變的，或者直接改狀態即可
+                                    notes: v.notes ? v.notes + ' [系統] 停駛逾期自動註銷' : '[系統] 停駛逾期自動註銷'
+                                };
+                            }
+                        }
+
+                        // 2. 檢查驗車是否過期 (原有邏輯)
+                        if (v.specialStatus && v.specialStatus !== '無') return v; // 有特殊狀態就不檢查驗車
+                        
                         if (v.status === '完成' && v.nextDate) {
                             const nextDate = new Date(v.nextDate);
                             const diffDays = Math.ceil((nextDate - today) / (1000 * 60 * 60 * 24));
@@ -198,6 +222,7 @@
                         }
                         return v;
                     });
+
                     setVehicles(checkedData);
                     if (hasAutoUpdate) localStorage.setItem('myVehicleData_iOS_v2', JSON.stringify(checkedData));
                 }
@@ -387,7 +412,6 @@
                 
                 <input type="file" ref={fileInputRef} onChange={handleImport} accept=".json" style={{display:'none'}} />
 
-                {/* Toast 提示訊息 */}
                 {toast && (
                     <div className="fixed bottom-20 left-1/2 transform -translate-x-1/2 z-50">
                         <div className="bg-black/80 text-white px-4 py-2 rounded-full text-sm shadow-lg flex items-center gap-2 animate-bounce">
@@ -485,14 +509,20 @@
                             const today = new Date(); today.setHours(0,0,0,0);
                             const nextDate = new Date(v.nextDate);
                             const daysPassed = Math.ceil((today - nextDate) / (1000 * 60 * 60 * 24));
-                            const isInactive = v.specialStatus === '報廢' || v.specialStatus === '過戶' || v.specialStatus === '停駛' || v.specialStatus === '扣牌';
+                            // 牌照註銷 也是一種 inactive 狀態
+                            const isInactive = v.specialStatus === '報廢' || v.specialStatus === '過戶' || v.specialStatus === '停駛' || v.specialStatus === '扣牌' || v.specialStatus === '牌照註銷';
                             
                             let statusColorClass = 'border-green-500';
                             let statusText = null;
                             const showQuickInspectBtn = !isInactive && (v.status === '待驗' || daysPassed >= -30);
 
                             if (isInactive) {
-                                statusColorClass = 'border-gray-400 opacity-70 grayscale';
+                                // 牌照註銷顯示紅色警戒，其他灰色
+                                if (v.specialStatus === '牌照註銷') {
+                                    statusColorClass = 'border-red-700 bg-red-50';
+                                } else {
+                                    statusColorClass = 'border-gray-400 opacity-70 grayscale';
+                                }
                             } else {
                                 if (daysPassed > 30) {
                                     statusColorClass = 'border-gray-800 border-l-8 bg-red-50';
@@ -518,12 +548,16 @@
                                         <div>
                                             <div className="flex items-center gap-2 flex-wrap">
                                                 <span className="text-xl font-bold text-slate-800">{v.plate}</span>
-                                                {/* 複製按鈕 */}
                                                 <button onClick={() => handleCopyPlate(v.plate)} className="text-gray-400 hover:text-blue-600 active:scale-90 transition-transform">
                                                     📋
                                                 </button>
                                                 {statusText}
-                                                {v.specialStatus && v.specialStatus !== '無' && <span className="text-[10px] px-1.5 py-0.5 rounded font-bold bg-gray-200 text-gray-600">{v.specialStatus}</span>}
+                                                {/* 特殊狀態標籤 */}
+                                                {v.specialStatus && v.specialStatus !== '無' && (
+                                                    <span className={`text-[10px] px-1.5 py-0.5 rounded font-bold ${v.specialStatus === '牌照註銷' ? 'bg-red-600 text-white' : 'bg-gray-200 text-gray-600'}`}>
+                                                        {v.specialStatus}
+                                                    </span>
+                                                )}
                                             </div>
                                             <div className="text-xs text-slate-500 mt-1 flex flex-wrap gap-x-2">
                                                 <span>{v.brand}</span><span className="text-slate-300">|</span><span>{v.year}年({v.cycle})</span><span className="text-slate-300">|</span><span>{v.tonnage ? v.tonnage+'噸' : '-噸'}</span>
@@ -568,7 +602,29 @@
                                             </div>
                                         )}
                                     </div>
-                                    {v.specialStatus && v.specialStatus !== '無' && (v.specialDateStart || v.specialDateEnd) && <div className="mt-2 text-xs bg-gray-100 p-2 rounded text-gray-700 border border-gray-200"><strong>{v.specialStatus}日期：</strong> {toROCDate(v.specialDateStart)} ~ {toROCDate(v.specialDateEnd) || '未定'}</div>}
+                                    
+                                    {/* 特殊狀態日期顯示 */}
+                                    {v.specialStatus && v.specialStatus !== '無' && (
+                                        <div className={`mt-2 text-xs p-2 rounded border ${v.specialStatus === '牌照註銷' ? 'bg-red-100 text-red-800 border-red-200' : 'bg-gray-100 text-gray-700 border-gray-200'}`}>
+                                            {v.specialStatus === '牌照註銷' ? (
+                                                <strong>⚠️ 牌照已註銷，需重新領牌！</strong>
+                                            ) : (
+                                                <>
+                                                    <strong>{v.specialStatus}日期：</strong>
+                                                    {v.specialStatus === '扣牌' ? 
+                                                        `${toROCDate(v.specialDateStart)} ~ ${toROCDate(v.specialDateEnd)}` : 
+                                                        toROCDate(v.specialDateStart)
+                                                    }
+                                                    {v.specialStatus === '停駛' && v.specialDateEnd && (
+                                                        <span className="block text-blue-600 mt-1">
+                                                            復駛期限：{toROCDate(v.specialDateEnd)}
+                                                        </span>
+                                                    )}
+                                                </>
+                                            )}
+                                        </div>
+                                    )}
+
                                     {v.notes && <div className="mt-2 text-xs bg-yellow-50 p-2 rounded text-yellow-800 border border-yellow-100">📝 {v.notes}</div>}
                                     <div className="flex gap-2 mt-2">
                                         <button onClick={() => downloadCalendarEvent(v)} className="flex-1 border border-blue-200 text-blue-600 py-1.5 rounded text-xs font-bold bg-blue-50">🔔 加入行事曆</button>
@@ -632,10 +688,55 @@
                                             <div className="flex-1"><label className="text-xs font-bold text-gray-700">狀態變更</label><select className="w-full border rounded p-2 mt-1 bg-white font-bold text-blue-900" value={formData.specialStatus} onChange={e => setFormData({...formData, specialStatus: e.target.value})}>{SPECIAL_STATUS_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}</select></div>
                                             {formData.specialStatus !== '無' && (<button type="button" onClick={() => {if(confirm('確定恢復正常狀態？')) {setFormData({ ...formData, specialStatus: '無', specialDateStart: '', specialDateEnd: '' });}}} className="bg-green-600 text-white px-3 py-2 rounded-lg font-bold text-xs shadow-md whitespace-nowrap mb-[1px]">🔄 恢復正常</button>)}
                                         </div>
-                                        {formData.specialStatus !== '無' && (
+                                        
+                                        {/* 核心修改：特殊狀態日期輸入框智慧顯示 */}
+                                        {formData.specialStatus !== '無' && formData.specialStatus !== '牌照註銷' && (
                                             <div className="grid grid-cols-2 gap-3">
-                                                <div><label className="text-xs font-bold text-gray-600">開始日期</label><input type="date" className="w-full border rounded p-2 mt-1" value={formData.specialDateStart} onChange={e=>setFormData({...formData, specialDateStart: e.target.value})} /></div>
-                                                <div><label className="text-xs font-bold text-gray-600">結束日期</label><input type="date" className="w-full border rounded p-2 mt-1" value={formData.specialDateEnd} onChange={e=>setFormData({...formData, specialDateEnd: e.target.value})} /></div>
+                                                {/* 扣牌顯示：開始 & 結束 */}
+                                                {formData.specialStatus === '扣牌' ? (
+                                                    <>
+                                                        <div><label className="text-xs font-bold text-gray-600">開始日期</label><input type="date" className="w-full border rounded p-2 mt-1" value={formData.specialDateStart} onChange={e=>setFormData({...formData, specialDateStart: e.target.value})} /></div>
+                                                        <div><label className="text-xs font-bold text-gray-600">結束日期</label><input type="date" className="w-full border rounded p-2 mt-1" value={formData.specialDateEnd} onChange={e=>setFormData({...formData, specialDateEnd: e.target.value})} /></div>
+                                                    </>
+                                                ) : formData.specialStatus === '停駛' ? (
+                                                    /* 停駛：顯示日期 + 自動計算期限 */
+                                                    <div className="col-span-2">
+                                                        <label className="text-xs font-bold text-gray-600">停駛日期</label>
+                                                        <input 
+                                                            type="date" 
+                                                            className="w-full border rounded p-2 mt-1" 
+                                                            value={formData.specialDateStart} 
+                                                            onChange={e => {
+                                                                const newDate = e.target.value;
+                                                                // 自動計算 6 個月後
+                                                                let newEndDate = '';
+                                                                if (newDate) {
+                                                                    const d = new Date(newDate);
+                                                                    d.setMonth(d.getMonth() + 6);
+                                                                    newEndDate = d.toISOString().split('T')[0];
+                                                                }
+                                                                setFormData({
+                                                                    ...formData, 
+                                                                    specialDateStart: newDate,
+                                                                    specialDateEnd: newEndDate
+                                                                });
+                                                            }} 
+                                                        />
+                                                        {formData.specialDateEnd && (
+                                                            <div className="text-xs text-blue-600 mt-1 font-bold">
+                                                                自動推算復駛期限：{toROCDate(formData.specialDateEnd)}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    /* 報廢、過戶：只顯示一個日期 */
+                                                    <div className="col-span-2">
+                                                        <label className="text-xs font-bold text-gray-600">
+                                                            {formData.specialStatus === '過戶' ? '過戶日期' : '報廢日期'}
+                                                        </label>
+                                                        <input type="date" className="w-full border rounded p-2 mt-1" value={formData.specialDateStart} onChange={e=>setFormData({...formData, specialDateStart: e.target.value})} />
+                                                    </div>
+                                                )}
                                             </div>
                                         )}
                                     </div>
