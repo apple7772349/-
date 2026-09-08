@@ -1,0 +1,784 @@
+<title>綿豐隨身查</title>
+<style>
+  :root{
+    --navy:#1a365d; --slate:#2d3748; --muted:#718096; --faint:#a0aec0;
+    --rule:#e2e8f0; --line:#cbd5e0; --field:#edf2f7; --wash:#f7fafc;
+    --ground:#eef1f5; --card:#ffffff;
+    --danger:#c53030; --dangerBg:#fff5f5; --dangerPill:#fed7d7; --dangerInk:#822727;
+    --warn:#c05621; --warnBg:#fffaf0; --warnPill:#feebc8; --warnInk:#7b341e;
+    --ok:#2f855a; --okPill:#c6f6d5; --okInk:#22543d;
+    --font:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
+    --tab-h:56px;
+  }
+  *{box-sizing:border-box}
+  body{background:var(--ground);color:var(--slate);font-family:var(--font);
+    font-size:15px;line-height:1.55;-webkit-text-size-adjust:100%;
+    padding-bottom:calc(var(--tab-h) + env(safe-area-inset-bottom,0px));}
+
+  .hdr{position:sticky;top:0;z-index:20;background:var(--navy);color:#fff;
+    padding:10px 14px calc(10px + env(safe-area-inset-top,0px));
+    padding-top:calc(10px + env(safe-area-inset-top,0px));}
+  .hdr-row{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+  .hdr h1{margin:0;font-size:16px;font-weight:700;letter-spacing:.02em}
+  .hdr .stamp{font-size:11px;color:#a8c0dd;font-variant-numeric:tabular-nums}
+  .hdr input{width:100%;margin-top:9px;padding:9px 12px;font-size:16px;font-family:inherit;
+    border:none;border-radius:9px;background:#2c4f7c;color:#fff}
+  .hdr input::placeholder{color:#9db6d4}
+  .hdr input:focus{outline:2px solid #f6ad55}
+
+  .demo{background:#fffaf0;border-bottom:1px solid #fbd38d;color:#7b4b12;
+    font-size:12px;padding:8px 14px;line-height:1.5}
+
+  .wrap{padding:12px 12px 20px}
+  .ttl{font-size:13px;font-weight:700;color:var(--navy);margin:16px 2px 8px;
+    display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .ttl:first-child{margin-top:2px}
+  .ttl .n{font-weight:400;color:var(--muted);font-size:12px}
+
+  .card{background:var(--card);border-radius:11px;padding:12px 13px;margin-bottom:9px;
+    border:1px solid var(--rule)}
+  .card.tap{cursor:pointer}
+  .r1{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .nm{font-size:15px;font-weight:700;color:var(--navy);min-width:0;word-break:break-word}
+  .sub{font-size:12.5px;color:var(--muted);margin-top:3px;word-break:break-word}
+  .kv{font-size:13px;margin-top:4px;display:flex;gap:7px}
+  .kv b{font-weight:400;color:var(--faint);flex-shrink:0;min-width:42px}
+  .kv span{min-width:0;word-break:break-word}
+  .mono{font-variant-numeric:tabular-nums;letter-spacing:.03em}
+  .amt{font-size:15px;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .amt.pos{color:var(--danger)} .amt.neg{color:var(--ok)}
+
+  .pill{font-size:11px;padding:3px 9px;border-radius:999px;white-space:nowrap;flex-shrink:0;
+    font-variant-numeric:tabular-nums}
+  .p-over{background:var(--dangerPill);color:var(--dangerInk)}
+  .p-due{background:var(--warnPill);color:var(--warnInk)}
+  .p-ok{background:var(--okPill);color:var(--okInk)}
+  .p-flat{background:var(--field);color:#4a5568}
+
+  .rem{border-left:4px solid var(--line);background:var(--card);border-radius:0 10px 10px 0;
+    padding:10px 12px;margin-bottom:8px;display:flex;justify-content:space-between;
+    align-items:center;gap:10px;border:1px solid var(--rule);border-left-width:4px}
+  .rem.over{border-left-color:var(--danger);background:var(--dangerBg)}
+  .rem.due{border-left-color:#dd6b20;background:var(--warnBg)}
+  .rt{font-size:14px;font-weight:700}
+  .rs{font-size:12px;color:var(--muted);margin-top:2px}
+
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .stat{background:var(--card);border:1px solid var(--rule);border-radius:11px;padding:11px 12px}
+  .stat .l{font-size:11.5px;color:var(--muted)}
+  .stat .v{font-size:22px;font-weight:700;color:var(--navy);font-variant-numeric:tabular-nums}
+
+  .chips{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;-webkit-overflow-scrolling:touch}
+  .chip{flex-shrink:0;font-size:12.5px;padding:6px 12px;border-radius:999px;
+    background:var(--card);border:1px solid var(--line);color:#4a5568;font-family:inherit}
+  .chip.on{background:var(--navy);border-color:var(--navy);color:#fff;font-weight:700}
+
+  .det{display:none;margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
+  .det.open{display:block}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:6px 0;
+    border-bottom:1px solid var(--wash);font-size:13px}
+  .row:last-child{border-bottom:none}
+  .row .d{color:var(--muted);font-size:12px}
+  .more{font-size:12px;color:#2b6cb0;margin-top:7px;background:none;border:none;padding:0;font-family:inherit}
+
+  .todo{display:flex;gap:11px;align-items:flex-start}
+  .todo .box{width:22px;height:22px;border:2px solid var(--line);border-radius:6px;
+    flex-shrink:0;margin-top:1px;background:#fff;display:flex;align-items:center;
+    justify-content:center;font-size:14px;color:#fff}
+  .todo.done .box{background:var(--ok);border-color:var(--ok)}
+  .todo.done .nm{text-decoration:line-through;color:var(--muted);font-weight:400}
+  .todo .nm{font-size:14.5px;font-weight:400;color:var(--slate)}
+
+  .add{background:var(--card);border:1px solid var(--rule);border-radius:11px;padding:11px;margin-bottom:11px}
+  .add input,.add select{width:100%;padding:10px;font-size:16px;font-family:inherit;
+    border:1px solid var(--line);border-radius:8px;margin-bottom:7px;background:#fff;color:inherit}
+  .add input:focus,.add select:focus{outline:2px solid #f6ad55;border-color:#f6ad55}
+  .add .two{display:flex;gap:7px}
+  .btn{width:100%;padding:11px;font-size:15px;font-weight:700;font-family:inherit;
+    border:none;border-radius:8px;background:var(--navy);color:#fff}
+  .btn.g{background:var(--ok)}
+  .pend{background:var(--warnBg);border:1px solid #fbd38d;border-radius:10px;
+    padding:10px 12px;margin-bottom:10px;font-size:13px;color:#7b4b12}
+
+  .empty{color:var(--faint);font-size:13.5px;text-align:center;padding:26px 10px;
+    background:var(--card);border:1px solid var(--rule);border-radius:11px}
+
+  .nav{position:fixed;left:0;right:0;bottom:0;z-index:30;height:calc(var(--tab-h) + env(safe-area-inset-bottom,0px));
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    background:#fff;border-top:1px solid var(--line);display:flex}
+  .nav button{flex:1;border:none;background:none;font-family:inherit;font-size:10.5px;
+    color:var(--muted);display:flex;flex-direction:column;align-items:center;
+    justify-content:center;gap:3px;padding:0}
+  .nav button .i{font-size:19px;line-height:1}
+  .nav button.on{color:var(--navy);font-weight:700}
+
+  .sheet{position:fixed;inset:0;z-index:40;background:rgba(26,54,93,.42);display:none}
+  .sheet.open{display:block}
+  .sheet .panel{position:absolute;left:0;right:0;bottom:0;background:#fff;
+    border-radius:16px 16px 0 0;padding:16px 14px calc(20px + env(safe-area-inset-bottom,0px))}
+  .sheet h2{margin:0 0 12px;font-size:15px;color:var(--navy)}
+  .sheet .items{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .sheet .items button{padding:14px 10px;border:1px solid var(--rule);border-radius:11px;
+    background:var(--wash);font-family:inherit;font-size:14px;color:var(--slate);
+    display:flex;flex-direction:column;align-items:center;gap:5px}
+  .sheet .items button .i{font-size:21px}
+  .hide{display:none}
+  .cp{border:1px solid var(--line);background:#fff;color:#2b6cb0;font-family:inherit;
+    font-size:11.5px;padding:3px 9px;border-radius:7px;margin-left:7px;
+    vertical-align:middle;white-space:nowrap}
+  .cp:active{background:var(--field)}
+  .toast{position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(var(--tab-h) + 18px + env(safe-area-inset-bottom,0px));
+    z-index:50;background:var(--slate);color:#fff;padding:10px 18px;border-radius:9px;
+    font-size:13.5px;opacity:0;pointer-events:none;transition:opacity .18s;max-width:86vw;text-align:center}
+  .toast.on{opacity:.96}
+  @media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="hdr">
+  <div class="hdr-row">
+    <h1 id="hTitle">綿豐隨身查</h1>
+    <span class="stamp" id="hStamp"></span>
+  </div>
+  <input id="q" type="search" placeholder="搜尋車牌、車主、公司、統編…" autocomplete="off">
+</div>
+
+
+
+<div class="wrap" id="body"></div>
+
+<div class="nav" id="nav"></div>
+
+<div class="toast" id="toast"></div>
+
+<div class="sheet" id="sheet"><div class="panel">
+  <h2>其他項目</h2>
+  <div class="items" id="sheetItems"></div>
+</div></div>
+
+<script>
+const $=i=>document.getElementById(i);
+const esc=s=>String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;');
+const money=n=>{const v=Math.round(Number(n)||0);return (v<0?'-$':'$')+Math.abs(v).toLocaleString();};
+const today=(()=>{const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');})();
+const days=s=>{if(!s)return null;const t=new Date(s+'T00:00:00');if(isNaN(t))return null;
+  return Math.round((t-new Date(today+'T00:00:00'))/86400000);};
+const tag=(d,noneTxt)=>{
+  if(d===null)return `<span class="pill p-flat">${noneTxt||'無期限'}</span>`;
+  if(d<0)return `<span class="pill p-over">已過期 ${-d} 天</span>`;
+  if(d===0)return '<span class="pill p-due">今天</span>';
+  if(d<=30)return `<span class="pill p-due">剩 ${d} 天</span>`;
+  return `<span class="pill p-ok">剩 ${d} 天</span>`;
+};
+
+let toastT=null;
+function toast(msg){
+  const el=$('toast'); el.textContent=msg; el.classList.add('on');
+  clearTimeout(toastT); toastT=setTimeout(()=>el.classList.remove('on'),1600);
+}
+
+/* 複製：優先用 clipboard API；離線用檔案開啟時它可能不能用，
+   所以留一段 iOS Safari 也吃得下的備援選取複製。 */
+function copyText(txt,label){
+  const done=()=>toast('已複製　'+txt);
+  const fail=()=>toast('複製失敗，請長按文字手動複製');
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(done).catch(()=>legacy());
+  } else legacy();
+  function legacy(){
+    try{
+      const ta=document.createElement('textarea');
+      ta.value=txt; ta.contentEditable='true'; ta.readOnly=false;
+      ta.style.cssText='position:fixed;top:0;left:0;opacity:0;font-size:16px';
+      document.body.appendChild(ta);
+      const r=document.createRange(); r.selectNodeContents(ta);
+      const s=window.getSelection(); s.removeAllRanges(); s.addRange(r);
+      ta.setSelectionRange(0,txt.length);
+      const ok=document.execCommand('copy');
+      document.body.removeChild(ta);
+      ok?done():fail();
+    }catch(e){fail();}
+  }
+}
+
+/* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
+   程式本體不含任何資料，所以放公開空間也不會外洩。 */
+const LS_DATA='mienfeng_data';
+const EMPTY={stamp:'',owners:[],vehicles:[],todos:[],insurances:[],checksOut:[],
+  checksIn:[],fuel:[],books:[],loans:[],ledgers:[],statements:[]};
+let DB=Object.assign({},EMPTY);
+try{
+  const raw=localStorage.getItem(LS_DATA);
+  if(raw){ const d=JSON.parse(raw); if(d&&typeof d==='object') DB=Object.assign({},EMPTY,d); }
+}catch(e){}
+
+function saveData(){
+  try{ localStorage.setItem(LS_DATA,JSON.stringify(DB)); return true; }
+  catch(e){ toast('儲存失敗：手機空間可能不足'); return false; }
+}
+
+function importDataFile(file){
+  if(!file) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    let d;
+    try{ d=JSON.parse(e.target.result); }
+    catch(err){ toast('檔案讀不懂，確認是電腦匯出的資料檔'); return; }
+    if(!d||!Array.isArray(d.vehicles)||!Array.isArray(d.owners)){
+      toast('這不是綿豐的資料檔'); return;
+    }
+    const merged=Object.assign({},EMPTY,d);
+    // 手機上還沒回傳電腦的代辦要留著，不能被新資料蓋掉
+    const keep=(DB.todos||[]).filter(t=>pending.includes(t.id));
+    keep.forEach(t=>{
+      const i=merged.todos.findIndex(x=>x.id===t.id);
+      if(i>-1) merged.todos[i]=t; else merged.todos.push(t);
+    });
+    DB=merged;
+    if(saveData()){
+      toast('匯入完成：車輛 '+DB.vehicles.length+' 台'+(keep.length?'，保留 '+keep.length+' 則未回傳代辦':''));
+      go('home');
+    }
+  };
+  r.readAsText(file);
+}
+
+const NAV=[
+  {k:'home',i:'🏠',t:'首頁'},
+  {k:'vehicles',i:'🚚',t:'車輛'},
+  {k:'owners',i:'👤',t:'車主'},
+  {k:'todos',i:'📝',t:'代辦'},
+  {k:'more',i:'⋯',t:'更多'}
+];
+const MORE=[
+  {k:'insurances',i:'🛡️',t:'保險'},
+  {k:'checks',i:'💳',t:'支票'},
+  {k:'fuel',i:'⛽',t:'油單發票'},
+  {k:'books',i:'🧾',t:'發票本'},
+  {k:'loans',i:'💰',t:'貸款分期'},
+  {k:'ledgers',i:'📒',t:'流水帳'},
+  {k:'statements',i:'📋',t:'結算單'},
+  {k:'data',i:'💾',t:'資料'}
+];
+const TITLES={home:'綿豐隨身查',vehicles:'車輛',owners:'車主資料',todos:'代辦事項',
+  insurances:'保險',checks:'支票',fuel:'油單發票',books:'發票本',loans:'貸款分期',
+  ledgers:'流水帳',statements:'結算單',search:'搜尋結果',data:'資料'};
+
+let page='home', kw='', vCompany='', vStatus='', pending=[], sendBox='';
+
+/* localStorage 只是備援，不是保管處。iOS 對本機檔案的 localStorage
+   不一定留得住，所以畫面會一直提醒你趕快傳回電腦。 */
+const LS='mienfeng_pending';
+function loadPending(){
+  try{
+    const raw=localStorage.getItem(LS); if(!raw)return;
+    const o=JSON.parse(raw);
+    if(o&&o.stamp===DB.stamp&&Array.isArray(o.todos)){
+      o.todos.forEach(t=>{
+        const i=DB.todos.findIndex(x=>x.id===t.id);
+        if(i>-1)DB.todos[i]=t; else DB.todos.push(t);
+        if(!pending.includes(t.id))pending.push(t.id);
+      });
+    }
+  }catch(e){}
+}
+function savePending(){
+  try{
+    localStorage.setItem(LS,JSON.stringify({
+      stamp:DB.stamp, todos:DB.todos.filter(t=>pending.includes(t.id))
+    }));
+  }catch(e){}
+}
+function buildSendText(){
+  return JSON.stringify({
+    type:'mienfeng-phone-todos',
+    at:new Date().toISOString().slice(0,10),
+    todos:DB.todos.filter(t=>pending.includes(t.id))
+  });
+}
+
+$('hStamp').textContent=DB.stamp;
+$('nav').innerHTML=NAV.map(n=>`<button data-k="${n.k}"><span class="i">${n.i}</span>${n.t}</button>`).join('');
+$('sheetItems').innerHTML=MORE.map(n=>`<button data-k="${n.k}"><span class="i">${n.i}</span>${n.t}</button>`).join('');
+
+$('nav').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.k==='more'){$('sheet').classList.add('open');return;}
+  go(b.dataset.k);};
+$('sheetItems').onclick=e=>{const b=e.target.closest('button');if(!b)return;
+  $('sheet').classList.remove('open');go(b.dataset.k);};
+$('sheet').onclick=e=>{if(e.target.id==='sheet')$('sheet').classList.remove('open');};
+$('q').oninput=e=>{kw=e.target.value.trim().toLowerCase();
+  if(kw){page='search';}else if(page==='search'){page='home';}
+  render();};
+
+function go(k){page=k;kw='';$('q').value='';window.scrollTo(0,0);render();}
+
+function navOn(){
+  const inMore=MORE.some(m=>m.k===page);
+  document.querySelectorAll('.nav button').forEach(b=>
+    b.classList.toggle('on', b.dataset.k===page || (inMore && b.dataset.k==='more')));
+}
+
+const norm=s=>String(s||'').toUpperCase().replace(/[^0-9A-Z]/g,'');
+const ownerOf=n=>DB.owners.find(o=>o.name===n);
+
+/* ---------- 各頁 ---------- */
+function homeHtml(){
+  const openT=DB.todos.filter(t=>!t.done);
+  const act=DB.vehicles.filter(v=>v.special==='無');
+  const insSoon=DB.insurances.map(i=>({i,d:days(i.end)})).filter(x=>x.d!==null&&x.d<=60).sort((a,b)=>a.d-b.d);
+  const chkSoon=[...DB.checksOut.map(c=>({c,d:days(c.due),side:'付'})),
+                 ...DB.checksIn.map(c=>({c,d:days(c.due),side:'收'}))]
+                 .filter(x=>x.c.status!=='cleared'&&x.d!==null&&x.d<=30).sort((a,b)=>a.d-b.d);
+  const vSoon=[];
+  act.forEach(v=>{
+    [['nextDate','驗車'],['insuranceDate','保險'],['passDate','通行證']].forEach(([f,lb])=>{
+      const d=days(v[f]); if(d!==null&&d<=30) vSoon.push({v,lb,d,date:v[f]});
+    });
+  });
+  vSoon.sort((a,b)=>a.d-b.d);
+
+  let h=`<div class="grid" style="margin-bottom:4px">
+    <div class="stat"><div class="l">代辦未完成</div><div class="v">${openT.length}</div></div>
+    <div class="stat"><div class="l">車輛提醒</div><div class="v">${vSoon.length}</div></div>
+    <div class="stat"><div class="l">一般車輛</div><div class="v">${act.length}</div></div>
+    <div class="stat"><div class="l">車主</div><div class="v">${DB.owners.length}</div></div>
+  </div>`;
+
+  h+=`<div class="ttl">📝 代辦事項 <span class="n">${openT.length} 則未完成</span></div>`;
+  if(!openT.length) h+='<div class="empty">目前沒有未完成的代辦。</div>';
+  else{
+    const ov=openT.filter(t=>{const d=days(t.due);return d!==null&&d<0;}).sort((a,b)=>days(a.due)-days(b.due));
+    const so=openT.filter(t=>{const d=days(t.due);return d!==null&&d>=0&&d<=30;}).sort((a,b)=>days(a.due)-days(b.due));
+    const no=openT.filter(t=>days(t.due)===null);
+    const fa=openT.filter(t=>{const d=days(t.due);return d!==null&&d>30;});
+    [...ov,...so,...no].forEach(t=>{
+      const d=days(t.due);
+      h+=`<div class="rem ${t.due?(d<0?'over':'due'):''}"><div>
+        <div class="rt">${esc(t.text)}</div>
+        <div class="rs">${esc(t.owner||'未指定車主')}${t.plate?'　·　'+esc(t.plate):''}${t.due?'　·　'+esc(t.due):''}</div>
+        </div>${tag(d)}</div>`;
+    });
+    if(fa.length) h+=`<div class="empty" style="padding:12px">還有 ${fa.length} 則未到期</div>`;
+  }
+
+  h+=`<div class="ttl">🚚 車輛提醒 <span class="n">30 天內</span></div>`;
+  h+= vSoon.length? vSoon.map(({v,lb,d,date})=>
+    `<div class="rem ${d<0?'over':'due'}"><div>
+      <div class="rt">${esc(v.plate)} — ${esc(lb)}</div>
+      <div class="rs">${esc(v.owner)}　·　${esc(v.company)}　·　${esc(date)}</div>
+     </div>${tag(d)}</div>`).join('')
+    :'<div class="empty">30 天內沒有到期的車輛資料。</div>';
+
+  h+=`<div class="ttl">🛡️ 保險續保 <span class="n">60 天內</span></div>`;
+  h+= insSoon.length? insSoon.map(({i,d})=>
+    `<div class="rem ${d<0?'over':'due'}"><div>
+      <div class="rt">${esc(i.vehicle)} ${esc(i.owner)}</div>
+      <div class="rs">${esc(i.insurer)}　·　到期 ${esc(i.end)}</div>
+     </div>${tag(d)}</div>`).join('')
+    :'<div class="empty">60 天內沒有到期保單。</div>';
+
+  h+=`<div class="ttl">💳 支票 <span class="n">30 天內</span></div>`;
+  h+= chkSoon.length? chkSoon.map(({c,d,side})=>
+    `<div class="rem ${d<0?'over':'due'}"><div>
+      <div class="rt">${side==='付'?'應付':'應收'}　${esc(c.payee||c.payer)}</div>
+      <div class="rs">${esc(c.content||(c.bank+' '+c.checkNo))}　·　${esc(c.due)}</div>
+     </div><div style="text-align:right"><div class="amt ${side==='付'?'pos':'neg'}">${money(c.amount)}</div>${tag(d)}</div></div>`).join('')
+    :'<div class="empty">30 天內沒有支票到期。</div>';
+  return h;
+}
+
+const COMPANIES=['綿豐(頭)','銓豐(頭)','綿豐貨運(頭)','綿豐(尾)','銓豐(尾)','綿豐貨運(尾)'];
+const SPECIALS=['停駛','扣牌','報廢','過戶','牌照註銷'];
+const STATUS_OPTS=[['','一般車輛'],['due','30天內提醒'],['odIns','驗車逾期'],['odIsr','保險逾期'],
+  ['完成','完成'],['待驗','待驗'],...SPECIALS.map(s=>[s,s])];
+const kind=c=>String(c||'').includes('(尾)')?'車尾':'車頭';
+const inactive=v=>SPECIALS.includes(v.special||'無');
+const hasRemind=v=>!inactive(v)&&[v.nextDate,v.insuranceDate,v.passDate]
+  .some(x=>{const d=days(x);return d!==null&&d<=30;});
+
+// 跟桌面版同一套規則
+const isOverdue=(v,f)=>{const d=days(v[f]);return d!==null&&d<0;};
+
+function matchStatus(v,st){
+  if(!st) return !inactive(v);
+  if(st==='due') return hasRemind(v);
+  if(st==='odIns') return !inactive(v)&&isOverdue(v,'nextDate');
+  if(st==='odIsr') return !inactive(v)&&isOverdue(v,'insuranceDate');
+  if(SPECIALS.includes(st)) return (v.special||'無')===st;
+  if(st==='待驗'&&inactive(v)) return false;
+  return (v.status||'完成')===st;
+}
+
+function vehiclesHtml(){
+  let list=DB.vehicles.slice();
+  if(vCompany) list=list.filter(v=>v.company===vCompany);
+  list=list.filter(v=>matchStatus(v,vStatus));
+  list.sort((a,b)=>COMPANIES.indexOf(a.company)-COMPANIES.indexOf(b.company)
+    || (a.plate||'').localeCompare(b.plate||''));
+
+  const heads=list.filter(v=>kind(v.company)==='車頭').length;
+  /* 這三個數字用「同一家公司的一般車輛」當基準，不跟著狀態篩選跑，
+     不然點進「還沒驗車」之後另外兩個數字就變成交集，看了會誤會。 */
+  const base=DB.vehicles.filter(v=>(!vCompany||v.company===vCompany)&&!inactive(v));
+  const due=base.filter(v=>hasRemind(v)).length;
+  const noInspect=base.filter(v=>isOverdue(v,'nextDate')).length;
+  const noInsure=base.filter(v=>isOverdue(v,'insuranceDate')).length;
+
+  let h=`<div class="chips">
+    <button class="chip ${vCompany===''?'on':''}" data-vc="">全部公司</button>
+    ${COMPANIES.map(c=>`<button class="chip ${c===vCompany?'on':''}" data-vc="${c}">${c}</button>`).join('')}
+  </div>
+  <div class="chips">
+    ${STATUS_OPTS.map(([v,t])=>`<button class="chip ${v===vStatus?'on':''}" data-vs="${v}">${t}</button>`).join('')}
+  </div>
+  <div class="grid" style="margin-bottom:4px">
+    <div class="stat"><div class="l">符合 · 車頭/車尾</div>
+      <div class="v">${list.length} <span style="font-size:14px;color:var(--muted);font-weight:400">（${heads}/${list.length-heads}）</span></div></div>
+    <div class="stat"><div class="l">30 天內到期</div>
+      <div class="v" style="color:${due?'var(--warn)':'var(--navy)'}">${due}</div></div>
+    <div class="stat" data-vs="odIns" style="cursor:pointer">
+      <div class="l">還沒驗車 <span style="color:var(--faint)">點看名單</span></div>
+      <div class="v" style="color:${noInspect?'var(--danger)':'var(--ok)'}">${noInspect}</div></div>
+    <div class="stat" data-vs="odIsr" style="cursor:pointer">
+      <div class="l">保險未續保 <span style="color:var(--faint)">點看名單</span></div>
+      <div class="v" style="color:${noInsure?'var(--danger)':'var(--ok)'}">${noInsure}</div></div>
+  </div>`;
+
+  if(!list.length) return h+'<div class="empty">沒有符合條件的車輛。</div>';
+
+  const groups=[];
+  list.forEach(v=>{
+    let g=groups.find(x=>x.key===v.company);
+    if(!g){g={key:v.company,rows:[]};groups.push(g);}
+    g.rows.push(v);
+  });
+  h+=groups.map(g=>{
+    const gh=g.rows.filter(v=>kind(v.company)==='車頭').length;
+    const gd=g.rows.filter(v=>hasRemind(v)).length;
+    return `<div class="ttl">${esc(g.key)}
+      <span class="n">車頭 ${gh}　車尾 ${g.rows.length-gh}${gd?'　提醒 '+gd:''}　共 ${g.rows.length} 台</span></div>`
+      + g.rows.map(vehicleCard).join('');
+  }).join('');
+  return h;
+}
+
+function vehicleCard(v){
+  const dates=[['驗車',v.nextDate],['保險',v.insuranceDate],['通行證',v.passDate]]
+    .filter(([,d])=>d)
+    .map(([l,d])=>`<div class="kv"><b>${l}</b><span class="mono">${esc(d)}</span> ${tag(days(d))}</div>`).join('');
+  const spec=(v.special&&v.special!=='無')
+    ? `<div class="kv"><b>日期</b><span class="mono">${esc(v.sStart)||'—'}${v.sEnd&&v.sEnd!==v.sStart?' ~ '+esc(v.sEnd):''}</span></div>`
+    : '';
+  const meta=[v.brand,v.year,v.tonnage?v.tonnage+' 噸':'',v.trailer,v.cycle]
+    .filter(Boolean).map(esc).join('　·　');
+  return `<div class="card"><div class="r1">
+    <div style="min-width:0"><div class="nm mono">${esc(v.plate)}<button class="cp" data-cp="${esc(v.plate)}">複製</button></div>
+    <div class="sub">${esc(v.owner)}　·　${esc(v.company)}</div>
+    ${meta?`<div class="sub">${meta}</div>`:''}</div>
+    <div style="text-align:right;display:flex;flex-direction:column;gap:4px;align-items:flex-end">
+      ${(v.special&&v.special!=='無')?`<span class="pill p-flat">${esc(v.special)}</span>`
+        :`<span class="pill ${v.status==='待驗'?'p-due':'p-ok'}">${esc(v.status||'完成')}</span>`}
+    </div></div>
+    ${dates}${spec}
+    ${v.insurer?`<div class="kv"><b>保險商</b><span>${esc(v.insurer)}</span></div>`:''}
+    ${v.passName?`<div class="kv"><b>證別</b><span>${esc(v.passName)}</span></div>`:''}
+    ${v.notes?`<div class="kv"><b>備註</b><span style="white-space:pre-line">${esc(v.notes)}</span></div>`:''}</div>`;
+}
+
+function ownersHtml(){
+  let h=`<div class="ttl">👤 車主 <span class="n">${DB.owners.length} 位</span></div>`;
+  h+=DB.owners.map((o,ix)=>{
+    const vs=DB.vehicles.filter(v=>v.owner===o.name);
+    const nt=DB.todos.filter(t=>t.owner===o.name&&!t.done).length;
+    return `<div class="card"><div class="r1">
+      <div style="min-width:0"><div class="nm">${esc(o.name)}</div>
+      <div class="sub">${esc(o.company)}${o.phone?'　·　'+esc(o.phone):''}　·　稅率 ${o.taxRate}%</div>
+      <div class="sub">車輛 ${vs.length} 台${vs.length?'：'+vs.map(v=>esc(v.plate)).join('、'):''}</div></div>
+      ${nt?`<span class="pill p-due">代辦 ${nt}</span>`:''}</div>
+      ${o.billing.length?`<button class="more" data-ob="${ix}">開票資料 ${o.billing.length} 筆　展開 ▾</button>`:'<div class="sub" style="margin-top:6px">尚未建立開票資料</div>'}
+      <div class="det" id="ob${ix}">
+        ${o.billing.map(b=>`<div style="padding:9px 0;border-bottom:1px solid var(--wash)">
+          <div style="font-weight:700;font-size:14px">${esc(b.name)}</div>
+          <div class="kv"><b>統編</b><span class="mono">${esc(b.taxId)}</span><button class="cp" data-cp="${esc(b.taxId)}">複製</button></div>
+          <div class="kv"><b>地址</b><span>${b.addr?esc(b.addr)+`<button class="cp" data-cp="${esc(b.addr)}">複製</button>`:'<span style="color:#a0aec0">未填（車主自取或不需寄送）</span>'}</span></div>
+          ${(b.contact||b.phone)?`<div class="kv"><b>聯絡</b><span>${esc(b.contact)} ${esc(b.phone)}</span></div>`:''}
+          ${b.note?`<div class="kv"><b>備註</b><span>${esc(b.note)}</span></div>`:''}
+        </div>`).join('')}
+        ${o.memo?`<div class="kv" style="margin-top:8px"><b>備忘</b><span>${esc(o.memo)}</span></div>`:''}
+      </div></div>`;
+  }).join('');
+  return h;
+}
+
+function todosHtml(){
+  const open=DB.todos.filter(t=>!t.done).sort((a,b)=>{
+    const x=days(a.due),y=days(b.due);
+    if(x===null&&y===null)return 0; if(x===null)return 1; if(y===null)return -1; return x-y;});
+  const done=DB.todos.filter(t=>t.done);
+  let h='';
+  if(pending.length){
+    h+=`<div class="pend">
+      <div style="font-weight:700;margin-bottom:6px">⚠ 有 ${pending.length} 則還沒傳回電腦</div>
+      <div style="margin-bottom:9px">在手機上新增或勾選的代辦，要傳回電腦才會進到系統裡。</div>
+      <button class="btn g" data-go="data">去產生回傳文字</button>
+    </div>`;
+  }
+  h+=`<div class="add">
+    <input id="ntext" placeholder="要做什麼？例：驗車逾期，約時間去監理站">
+    <div class="two">
+      <select id="nowner"><option value="">不指定車主</option>${DB.owners.map(o=>`<option>${esc(o.name)}</option>`).join('')}</select>
+      <input id="ndue" type="date">
+    </div>
+    <button class="btn" id="nadd">＋ 新增代辦</button>
+  </div>`;
+  h+=`<div class="ttl">未完成 <span class="n">${open.length} 則</span></div>`;
+  h+= open.length? open.map(t=>todoCard(t)).join('') : '<div class="empty">沒有未完成的代辦。</div>';
+  if(done.length){
+    h+=`<div class="ttl">已完成 <span class="n">${done.length} 則</span></div>`;
+    h+=done.map(t=>todoCard(t)).join('');
+  }
+  return h;
+}
+function todoCard(t){
+  const d=days(t.due);
+  return `<div class="card"><div class="todo ${t.done?'done':''}" data-tid="${t.id}">
+    <div class="box">${t.done?'✓':''}</div>
+    <div style="flex:1;min-width:0">
+      <div class="nm">${esc(t.text)}</div>
+      <div class="sub">${esc(t.owner||'未指定車主')}${t.plate?'　·　'+esc(t.plate):''}${t.due&&!t.done?'　·　'+esc(t.due):''}${t.done&&t.doneAt?'　·　'+esc(t.doneAt)+' 完成':''}</div>
+    </div>
+    ${t.done?'<span class="pill p-ok">已完成</span>':tag(d)}
+  </div></div>`;
+}
+
+function insurancesHtml(){
+  const list=DB.insurances.slice().sort((a,b)=>(days(a.end)??9e9)-(days(b.end)??9e9));
+  return `<div class="ttl">🛡️ 保險 <span class="n">${list.length} 筆</span></div>`+
+    (list.length?list.map(i=>`<div class="card"><div class="r1">
+      <div style="min-width:0"><div class="nm mono">${esc(i.vehicle)} <span style="font-family:var(--font)">${esc(i.owner)}</span></div>
+      <div class="sub">${esc(i.insurer)}　·　${esc((i.types||[]).join('、'))}</div>
+      <div class="kv"><b>保期</b><span class="mono">${esc(i.start)} ~ ${esc(i.end)}</span></div>
+      ${i.note?`<div class="kv"><b>備註</b><span>${esc(i.note)}</span></div>`:''}</div>
+      <div style="text-align:right"><div class="amt">${money(i.total)}</div>${tag(days(i.end))}</div></div></div>`).join('')
+    :'<div class="empty">沒有保險紀錄。</div>');
+}
+
+function checksHtml(){
+  const f=(arr,side)=>arr.slice().sort((a,b)=>(days(a.due)??9e9)-(days(b.due)??9e9)).map(c=>
+    `<div class="card"><div class="r1">
+      <div style="min-width:0"><div class="nm">${esc(c.payee||c.payer)}</div>
+      <div class="sub">${esc(c.content||(c.bank+' 票號 '+c.checkNo))}</div>
+      <div class="kv"><b>兌現</b><span class="mono">${esc(c.due)||'—'}</span></div></div>
+      <div style="text-align:right"><div class="amt ${side==='out'?'pos':'neg'}">${money(c.amount)}</div>${tag(days(c.due))}</div>
+    </div></div>`).join('');
+  const sum=(arr)=>arr.filter(c=>c.status!=='cleared').reduce((s,c)=>s+Number(c.amount||0),0);
+  return `<div class="grid" style="margin-bottom:4px">
+    <div class="stat"><div class="l">待付總額</div><div class="v" style="color:var(--danger);font-size:19px">${money(sum(DB.checksOut))}</div></div>
+    <div class="stat"><div class="l">待收總額</div><div class="v" style="color:var(--ok);font-size:19px">${money(sum(DB.checksIn))}</div></div>
+  </div>
+  <div class="ttl">開出支票 <span class="n">${DB.checksOut.length} 張</span></div>${f(DB.checksOut,'out')}
+  <div class="ttl">收到支票 <span class="n">${DB.checksIn.length} 張</span></div>${f(DB.checksIn,'in')}`;
+}
+
+function fuelHtml(){
+  return `<div class="ttl">⛽ 油單發票 <span class="n">${DB.fuel.length} 位車主</span></div>`+
+    DB.fuel.map((f,ix)=>{
+      const noReg=f.rows.filter(r=>!r.registered).length, noDone=f.rows.filter(r=>!r.done).length;
+      const tot=f.rows.reduce((s,r)=>s+Number(r.sales||0),0);
+      return `<div class="card"><div class="r1">
+        <div><div class="nm">${esc(f.owner)}</div>
+        <div class="sub">${f.rows.length} 筆　·　稅率 ${f.rate}%　·　未登記 ${noReg}　未登入 ${noDone}</div></div>
+        <div class="amt">${money(tot)}</div></div>
+        <button class="more" data-fu="${ix}">明細　展開 ▾</button>
+        <div class="det" id="fu${ix}">${f.rows.map(r=>`<div class="row">
+          <div><div>${esc(r.note)||('民國 '+esc(r.year))}</div>
+          <div class="d">${r.registered?'已登記':'未登記'}　·　${r.done?'已登入':'未登入'}</div></div>
+          <div style="text-align:right"><div class="mono">${money(r.sales)}</div>
+          <div class="d mono">稅 ${money(r.tax)}</div></div></div>`).join('')}</div></div>`;
+    }).join('');
+}
+
+function booksHtml(){
+  const g={};
+  DB.books.forEach(b=>{const k=b.month+'｜'+b.company+'｜'+b.type;(g[k]=g[k]||[]).push(b);});
+  return `<div class="ttl">🧾 發票本 <span class="n">${DB.books.length} 本</span></div>`+
+    Object.entries(g).map(([k,arr])=>`<div class="ttl" style="font-size:12px;color:var(--muted);margin:10px 2px 6px">${esc(k)}　${arr.length} 本</div>`+
+      arr.map(b=>`<div class="card"><div class="r1">
+        <div><div class="nm mono">${esc(b.prefix)} ${esc(b.start)}－${esc(b.end)}</div>
+        <div class="sub">領用 ${esc(b.holder)||'—'}</div></div>
+        <span class="pill ${b.status==='未用'?'p-ok':'p-flat'}">${esc(b.status)}</span></div></div>`).join('')).join('');
+}
+
+function loansHtml(){
+  return `<div class="ttl">💰 貸款分期 <span class="n">${DB.loans.length} 筆</span></div>`+
+    (DB.loans.length?DB.loans.map(l=>{
+      const total=l.terms*l.per, paid=l.paid*l.per;
+      return `<div class="card"><div class="r1">
+        <div><div class="nm">${esc(l.owner)}　<span class="mono">${esc(l.plate)}</span></div>
+        <div class="sub">${esc(l.company)}　·　${esc(l.bank)}</div>
+        <div class="kv"><b>期間</b><span class="mono">${esc(l.start)} ~ ${esc(l.end)}</span></div>
+        <div class="kv"><b>期數</b><span>${l.paid} / ${l.terms} 期　每期 ${money(l.per)}</span></div></div>
+        <div style="text-align:right"><div class="amt pos">${money(total-paid)}</div>
+        <div class="sub">未繳</div>${tag(days(l.end))}</div></div></div>`;
+    }).join('')
+    :'<div class="empty">沒有貸款分期紀錄。</div>');
+}
+
+function ledgersHtml(){
+  return `<div class="ttl">📒 流水帳 <span class="n">${DB.ledgers.length} 本</span></div>`+
+    DB.ledgers.map((l,ix)=>`<div class="card"><div class="r1">
+      <div><div class="nm">${esc(l.owner)}</div>
+      <div class="sub">${esc(l.company)}${l.period?'　·　'+esc(l.period):''}　·　${l.entries.length} 筆</div></div>
+      <div style="text-align:right"><div class="amt ${l.balance>=0?'pos':'neg'}">${money(Math.abs(l.balance))}</div>
+      <div class="sub">${l.balance>=0?'應付':'溢繳'}</div></div></div>
+      <button class="more" data-lg="${ix}">明細　展開 ▾</button>
+      <div class="det" id="lg${ix}">${(()=>{let b=0;return l.entries.map(e=>{
+        b+=Number(e.expense||0)-Number(e.income||0);
+        return `<div class="row"><div><div>${esc(e.desc)||'—'}</div><div class="d mono">${esc(e.date)||'—'}</div></div>
+        <div style="text-align:right"><div class="mono ${e.income?'':'amt pos'}" style="font-size:13px">${e.income?'<span style="color:var(--ok)">+'+money(e.income)+'</span>':'-'+money(e.expense)}</div>
+        <div class="d mono">餘 ${money(b)}</div></div></div>`;}).join('');})()}</div></div>`).join('');
+}
+
+function statementsHtml(){
+  return `<div class="ttl">📋 結算單 <span class="n">${DB.statements.length} 張</span></div>`+
+    DB.statements.map(s=>{
+      const un=s.net-s.received;
+      return `<div class="card"><div class="r1">
+        <div><div class="nm">${esc(s.owner)}</div>
+        <div class="sub">${esc(s.company)}　·　${esc(s.from)} ~ ${esc(s.to)}</div>
+        <div class="kv"><b>已收</b><span class="mono">${money(s.received)}</span></div></div>
+        <div style="text-align:right"><div class="amt ${un>0?'pos':'neg'}">${money(s.net)}</div>
+        <span class="pill ${un>0?'p-due':'p-ok'}">${un>0?'未收 '+money(un):'已結清'}</span></div></div></div>`;
+    }).join('');
+}
+
+function dataHtml(){
+  const has=DB.vehicles.length>0;
+  let h=`<div class="card">
+    <div class="nm">目前這支手機上的資料</div>
+    <div class="kv"><b>來源</b><span>${DB.stamp?esc(DB.stamp):'<span style="color:#a0aec0">尚未匯入</span>'}</span></div>
+    <div class="kv"><b>內容</b><span>車輛 ${DB.vehicles.length}　車主 ${DB.owners.length}　代辦 ${DB.todos.length}</span></div>
+  </div>
+  <div class="ttl">從電腦匯入</div>
+  <div class="add">
+    <div style="font-size:13px;color:var(--muted);margin-bottom:9px">
+      電腦按「匯出手機資料」會產生一個 JSON 檔，用 LINE 傳過來或存進「檔案」App，再從這裡選它。
+      ${has?'重新匯入會換掉現有資料，但還沒回傳的代辦會保留。':''}</div>
+    <input type="file" id="dataFile" accept=".json,application/json"
+      style="width:100%;padding:10px;font-size:14px;border:1px solid var(--line);border-radius:8px;background:#fff">
+  </div>`;
+  if(pending.length){
+    h+=`<div class="ttl">待回傳電腦</div>
+    <div class="pend">
+      <div style="font-weight:700;margin-bottom:6px">有 ${pending.length} 則代辦還沒傳回去</div>
+      <button class="btn g" id="sendBack">產生回傳文字</button>
+    </div>`;
+    if(sendBox){
+      h+=`<div class="add">
+        <textarea id="sendText" readonly rows="5" style="width:100%;padding:10px;font-size:13px;
+          font-family:ui-monospace,Menlo,monospace;border:1px solid var(--line);border-radius:8px;
+          margin-bottom:7px;background:var(--wash);color:inherit">${esc(sendBox)}</textarea>
+        <button class="btn" data-cp="${esc(sendBox)}">複製這段文字</button>
+      </div>`;
+    }
+  }
+  return h;
+}
+
+function searchHtml(){
+  const k=kw, nk=norm(k), out=[];
+  const hit=s=>String(s||'').toLowerCase().includes(k);
+  DB.vehicles.filter(v=>hit(v.plate)||norm(v.plate).includes(nk)||hit(v.owner)||hit(v.company)||hit(v.brand))
+    .forEach(v=>out.push(['車輛',vehicleCard(v)]));
+  DB.owners.filter(o=>hit(o.name)||hit(o.company)||hit(o.phone)||
+      o.billing.some(b=>hit(b.name)||hit(b.taxId)||hit(b.addr)))
+    .forEach(o=>{
+      const bs=o.billing.filter(b=>hit(b.name)||hit(b.taxId)||hit(b.addr));
+      out.push(['車主',`<div class="card"><div class="nm">${esc(o.name)}</div>
+        <div class="sub">${esc(o.company)}${o.phone?'　·　'+esc(o.phone):''}</div>
+        ${(bs.length?bs:o.billing).map(b=>`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--wash)">
+          <div style="font-weight:700;font-size:14px">${esc(b.name)}</div>
+          <div class="kv"><b>統編</b><span class="mono">${esc(b.taxId)}</span><button class="cp" data-cp="${esc(b.taxId)}">複製</button></div>
+          <div class="kv"><b>地址</b><span>${b.addr?esc(b.addr):'<span style="color:#a0aec0">未填</span>'}</span></div></div>`).join('')}
+        </div>`]);
+    });
+  DB.todos.filter(t=>hit(t.text)||hit(t.owner)||hit(t.plate)).forEach(t=>out.push(['代辦',todoCard(t)]));
+  DB.insurances.filter(i=>hit(i.owner)||hit(i.vehicle)||hit(i.insurer))
+    .forEach(i=>out.push(['保險',`<div class="card"><div class="nm mono">${esc(i.vehicle)}</div>
+      <div class="sub">${esc(i.owner)}　·　${esc(i.insurer)}　·　到期 ${esc(i.end)}</div></div>`]));
+  DB.books.filter(b=>hit(b.holder)||hit(b.prefix)||hit(b.start)||hit(b.end)||hit(b.company))
+    .forEach(b=>out.push(['發票本',`<div class="card"><div class="nm mono">${esc(b.prefix)} ${esc(b.start)}－${esc(b.end)}</div>
+      <div class="sub">${esc(b.month)}　·　${esc(b.company)}　·　${esc(b.holder)}</div></div>`]));
+  if(!out.length) return `<div class="empty">找不到「${esc(kw)}」。<br><br>可以試試車牌、車主姓名、公司名或統編。</div>`;
+  const by={};out.forEach(([g,html])=>(by[g]=by[g]||[]).push(html));
+  return Object.entries(by).map(([g,arr])=>
+    `<div class="ttl">${g} <span class="n">${arr.length} 筆</span></div>${arr.join('')}`).join('');
+}
+
+/* ---------- 繪製 ---------- */
+function render(){
+  const map={home:homeHtml,vehicles:vehiclesHtml,owners:ownersHtml,todos:todosHtml,
+    insurances:insurancesHtml,checks:checksHtml,fuel:fuelHtml,books:booksHtml,
+    loans:loansHtml,ledgers:ledgersHtml,statements:statementsHtml,search:searchHtml,
+    data:dataHtml};
+  $('hTitle').textContent=TITLES[page]||'綿豐隨身查';
+  if(!DB.vehicles.length && !DB.owners.length && page!=='data'){
+    $('body').innerHTML=`<div class="card" style="text-align:center;padding:28px 16px">
+      <div style="font-size:34px;margin-bottom:10px">💾</div>
+      <div class="nm" style="font-size:17px">還沒有資料</div>
+      <div class="sub" style="margin:8px 0 16px">
+        在電腦上按「匯出手機資料」產生 JSON 檔，用 LINE 傳過來，<br>再從下面匯入。</div>
+      <button class="btn" data-go="data">去匯入資料</button>
+    </div>`;
+    navOn(); return;
+  }
+  $('body').innerHTML=(map[page]||homeHtml)();
+  const fp=$('dataFile');
+  if(fp) fp.onchange=e=>importDataFile(e.target.files[0]);
+  navOn();
+}
+
+$('body').addEventListener('click',e=>{
+  const gt=e.target.closest('[data-go]');
+  if(gt){go(gt.dataset.go);return;}
+  const cp=e.target.closest('[data-cp]');
+  if(cp){e.stopPropagation();copyText(cp.dataset.cp);return;}
+  const vc=e.target.closest('[data-vc]');
+  if(vc){vCompany=vc.dataset.vc;render();window.scrollTo(0,0);return;}
+  const vs=e.target.closest('[data-vs]');
+  if(vs){vStatus=vs.dataset.vs;render();window.scrollTo(0,0);return;}
+  const ex=e.target.closest('[data-ob],[data-fu],[data-lg]');
+  if(ex){
+    const id=ex.dataset.ob!==undefined?'ob'+ex.dataset.ob:
+             ex.dataset.fu!==undefined?'fu'+ex.dataset.fu:'lg'+ex.dataset.lg;
+    const el=$(id); const open=el.classList.toggle('open');
+    ex.textContent=ex.textContent.replace(/[▾▴]/, open?'▴':'▾');
+    return;
+  }
+  const td=e.target.closest('[data-tid]');
+  if(td){
+    const t=DB.todos.find(x=>x.id===td.dataset.tid);
+    t.done=!t.done; t.doneAt=t.done?today:'';
+    if(!pending.includes(t.id))pending.push(t.id);
+    sendBox=''; savePending(); saveData(); render(); return;
+  }
+  if(e.target.id==='sendBack'){
+    sendBox=buildSendText(); render();
+    setTimeout(()=>{const t=$('sendText'); if(t){t.scrollIntoView({block:'center'});}},50);
+    return;
+  }
+  if(e.target.id==='nadd'){
+    const tx=$('ntext').value.trim();
+    if(!tx){$('ntext').focus();return;}
+    const id='n'+Date.now();
+    DB.todos.push({id,owner:$('nowner').value,plate:'',text:tx,due:$('ndue').value,
+      done:false,doneAt:'',createdAt:today,fromPhone:true});
+    pending.push(id);
+    sendBox=''; savePending(); saveData(); render();
+  }
+});
+
+loadPending();
+render();
+</script>
