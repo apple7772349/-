@@ -8,11 +8,11 @@
     --warn:#c05621; --warnBg:#fffaf0; --warnPill:#feebc8; --warnInk:#7b341e;
     --ok:#2f855a; --okPill:#c6f6d5; --okInk:#22543d;
     --font:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
-    --k:1.15;
+    --k:1.3;
   }
   *{box-sizing:border-box}
   /* 字級開關：在「資料」頁可以切換，存在手機上 */
-  body.k-s{--k:1} body.k-m{--k:1.15} body.k-l{--k:1.3} body.k-xl{--k:1.45}
+  body.k-s{--k:1} body.k-m{--k:1.15} body.k-l{--k:1.3} body.k-xl{--k:1.45} body.k-xxl{--k:1.6}
   body{--tab-h:calc(70px * var(--k));
     background:var(--ground);color:var(--slate);font-family:var(--font);
     font-size:calc(17.5px * var(--k));line-height:1.62;-webkit-text-size-adjust:100%;
@@ -128,6 +128,16 @@
     border:1px solid var(--line);border-radius:8px;margin-bottom:7px;background:#fff;color:inherit}
   .add input:focus,.add select:focus{outline:2px solid #f6ad55;border-color:#f6ad55}
   .add .two{display:flex;gap:7px}
+  .pick{position:relative}
+  .picklist{border:1px solid var(--line);border-radius:10px;background:#fff;
+    margin-top:-3px;margin-bottom:7px;overflow:hidden}
+  .picklist button{display:block;width:100%;text-align:left;border:none;background:none;
+    font-family:inherit;font-size:calc(16px * var(--k));padding:12px 13px;color:var(--slate);
+    border-bottom:1px solid var(--wash)}
+  .picklist button:last-child{border-bottom:none}
+  .picklist button:active{background:var(--field)}
+  .picklist .pk-sub{display:block;font-size:calc(13px * var(--k));color:var(--muted);margin-top:2px}
+  .picklist .pk-none{padding:12px 13px;font-size:calc(14px * var(--k));color:var(--faint)}
   .btn{width:100%;padding:11px;font-size:calc(15px * var(--k));font-weight:700;font-family:inherit;
     border:none;border-radius:8px;background:var(--navy);color:#fff}
   .btn.g{background:var(--ok)}
@@ -191,7 +201,7 @@
     <h1 id="hTitle">綿豐隨身查</h1>
     <span class="stamp" id="hStamp"></span>
   </div>
-  <input id="q" type="search" placeholder="搜尋車牌、車主、公司、統編…" autocomplete="off">
+  <input id="q" type="search" placeholder="搜尋車主姓名或車牌" autocomplete="off">
 </div>
 
 
@@ -256,13 +266,13 @@ function copyText(txt,label){
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
-const FS_OPTS=[['k-s','標準'],['k-m','大'],['k-l','特大'],['k-xl','最大']];
+const FS_OPTS=[['k-s','標準'],['k-m','大'],['k-l','特大'],['k-xl','最大'],['k-xxl','超大']];
 function applyFontSize(k){
-  document.body.className=k||'k-m';
-  try{ localStorage.setItem(LS_FS,k||'k-m'); }catch(e){}
+  document.body.className=k||'k-l';
+  try{ localStorage.setItem(LS_FS,k||'k-l'); }catch(e){}
 }
 function currentFontSize(){
-  try{ return localStorage.getItem(LS_FS)||'k-m'; }catch(e){ return 'k-m'; }
+  try{ return localStorage.getItem(LS_FS)||'k-l'; }catch(e){ return 'k-l'; }
 }
 const EMPTY={stamp:'',owners:[],vehicles:[],todos:[],insurances:[],checksOut:[],
   checksIn:[],fuel:[],books:[],loans:[],ledgers:[],statements:[]};
@@ -324,7 +334,7 @@ const TITLES={home:'綿豐隨身查',vehicles:'車輛',owners:'車主資料',tod
   insurances:'保險',checks:'支票',fuel:'油單發票',books:'發票本',loans:'貸款分期',
   ledgers:'流水帳',statements:'結算單',search:'搜尋結果',data:'資料'};
 
-let page='home', kw='', vCompany='', vStatus='', pending=[], sendBox='';
+let page='home', kw='', vCompany='', vStatus='', ownerView='here', pending=[], sendBox='';
 
 /* localStorage 只是備援，不是保管處。iOS 對本機檔案的 localStorage
    不一定留得住，所以畫面會一直提醒你趕快傳回電腦。 */
@@ -397,12 +407,16 @@ function homeHtml(){
     });
   });
   vSoon.sort((a,b)=>a.d-b.d);
+  const overdue=f=>act.filter(v=>{const dd=days(v[f]);return dd!==null&&dd<0;}).length;
+  const noIns=overdue('nextDate'), noIsr=overdue('insuranceDate');
 
   let h=`<div class="grid" style="margin-bottom:4px">
     <div class="stat"><div class="l">代辦未完成</div><div class="v">${openT.length}</div></div>
-    <div class="stat"><div class="l">車輛提醒</div><div class="v">${vSoon.length}</div></div>
-    <div class="stat"><div class="l">一般車輛</div><div class="v">${act.length}</div></div>
-    <div class="stat"><div class="l">車主</div><div class="v">${DB.owners.length}</div></div>
+    <div class="stat"><div class="l">車輛提醒</div><div class="v">${new Set(vSoon.map(x=>x.v.plate)).size}</div></div>
+    <div class="stat" data-goveh="odIns"><div class="l">還沒驗車 <span style="color:var(--faint)">點看名單</span></div>
+      <div class="v" style="color:${noIns?'var(--danger)':'var(--ok)'}">${noIns}</div></div>
+    <div class="stat" data-goveh="odIsr"><div class="l">保險未續保 <span style="color:var(--faint)">點看名單</span></div>
+      <div class="v" style="color:${noIsr?'var(--danger)':'var(--ok)'}">${noIsr}</div></div>
   </div>`;
 
   h+=`<div class="ttl">📝 代辦事項 <span class="n">${openT.length} 則未完成</span></div>`;
@@ -422,7 +436,8 @@ function homeHtml(){
     if(fa.length) h+=`<div class="empty" style="padding:12px">還有 ${fa.length} 則未到期</div>`;
   }
 
-  h+=`<div class="ttl">🚚 車輛提醒 <span class="n">30 天內</span></div>`;
+  h+=`<div class="ttl">🚚 車輛提醒
+    <span class="n">30 天內　${new Set(vSoon.map(x=>x.v.plate)).size} 台 / ${vSoon.length} 項</span></div>`;
   h+= vSoon.length? vSoon.map(({v,lb,d,date})=>
     `<div class="rem ${d<0?'over':'due'}"><div>
       <div class="rt">${esc(v.plate)} — ${esc(lb)}</div>
@@ -453,6 +468,16 @@ const SPECIALS=['停駛','扣牌','報廢','過戶','牌照註銷'];
 const STATUS_OPTS=[['','一般車輛'],['due','30天內提醒'],['odIns','驗車逾期'],['odIsr','保險逾期'],
   ['完成','完成'],['待驗','待驗'],...SPECIALS.map(s=>[s,s])];
 const kind=c=>String(c||'').includes('(尾)')?'車尾':'車頭';
+
+/* 車輛「離開」的三種狀態。停駛與扣牌是暫時的，車主照樣算在籍。 */
+const GONE=['報廢','過戶','牌照註銷'];
+function ownerVehicles(name){ return DB.vehicles.filter(v=>v.owner===name); }
+function ownerLeft(name){
+  const vs=ownerVehicles(name);
+  if(!vs.length) return false;            // 沒有車就無從判斷，不當作離開
+  // 只看車輛：全部報廢/過戶/牌照註銷就算離開，不管底下有沒有開票資料或備忘
+  return vs.every(v=>GONE.includes(v.special||'無'));
+}
 const inactive=v=>SPECIALS.includes(v.special||'無');
 const hasRemind=v=>!inactive(v)&&[v.nextDate,v.insuranceDate,v.passDate]
   .some(x=>{const d=days(x);return d!==null&&d<=30;});
@@ -569,25 +594,43 @@ function vehicleCard(v){
 }
 
 function ownersHtml(){
-  let h=`<div class="ttl">👤 車主 <span class="n">${DB.owners.length} 位</span></div>`;
-  h+=DB.owners.map((o,ix)=>{
-    const vs=DB.vehicles.filter(v=>v.owner===o.name);
+  const all=DB.owners.slice();
+  const left=all.filter(o=>ownerLeft(o.name));
+  const here=all.filter(o=>!ownerLeft(o.name));
+  const list=ownerView==='left'?left:(ownerView==='all'?all:here);
+
+  let h=`<div class="chips">
+    <button class="chip ${ownerView==='here'?'on':''}" data-ov="here">一般車主 ${here.length}</button>
+    <button class="chip ${ownerView==='left'?'on':''}" data-ov="left">已離開 ${left.length}</button>
+    <button class="chip ${ownerView==='all'?'on':''}" data-ov="all">全部 ${all.length}</button>
+  </div>`;
+  if(ownerView==='left'){
+    h+='<div class="pend" style="margin-bottom:11px">名下車輛全部報廢、過戶或牌照註銷的車主。資料都留著，只是平常不列出來。</div>';
+  }
+  h+=`<div class="ttl">👤 車主 <span class="n">${list.length} 位</span></div>`;
+  if(!list.length) return h+'<div class="empty">沒有符合的車主。</div>';
+  h+=list.map((o,ix)=>{
+    const vs=ownerVehicles(o.name);
+    const alive=vs.filter(v=>!GONE.includes(v.special||'無'));
     const nt=DB.todos.filter(t=>t.owner===o.name&&!t.done).length;
+    const gone=ownerLeft(o.name);
     return `<div class="card"><div class="r1">
       <div style="min-width:0"><div class="nm">${esc(o.name)}</div>
       <div class="sub">${esc(o.company)}${o.phone?'　·　'+esc(o.phone):''}　·　稅率 ${o.taxRate}%</div>
-      <div class="sub">車輛 ${vs.length} 台${vs.length?'：'+vs.map(v=>esc(v.plate)).join('、'):''}</div></div>
-      ${nt?`<span class="pill p-due">代辦 ${nt}</span>`:''}</div>
-      ${o.billing.length?`<button class="more" data-ob="${ix}">開票資料 ${o.billing.length} 筆　展開 ▾</button>`:'<div class="sub" style="margin-top:6px">尚未建立開票資料</div>'}
+      <div class="sub dim">車輛 ${vs.length} 台${vs.length&&alive.length!==vs.length?'（在籍 '+alive.length+'）':''}${vs.length?'：'+vs.map(v=>esc(v.plate)).join('、'):''}</div></div>
+      <div style="display:flex;flex-direction:column;gap:5px;align-items:flex-end">
+      ${gone?'<span class="pill p-flat">已離開</span>':''}
+      ${nt?`<span class="pill p-due">代辦 ${nt}</span>`:''}</div></div>
+      ${o.billing.length?`<button class="more" data-ob="${ix}">開票資料 ${o.billing.length} 筆　展開 ▾</button>`:'<div class="sub dim" style="margin-top:7px">尚未建立開票資料</div>'}
       <div class="det" id="ob${ix}">
-        ${o.billing.map(b=>`<div style="padding:9px 0;border-bottom:1px solid var(--wash)">
-          <div style="font-weight:700;font-size:14px">${esc(b.name)}</div>
+        ${o.billing.map(b=>`<div style="padding:11px 0;border-bottom:1px solid var(--wash)">
+          <div style="font-weight:700">${esc(b.name)}</div>
           <div class="kv"><b>統編</b><span class="mono">${esc(b.taxId)}</span><button class="cp" data-cp="${esc(b.taxId)}">複製</button></div>
-          <div class="kv"><b>地址</b><span>${b.addr?esc(b.addr)+`<button class="cp" data-cp="${esc(b.addr)}">複製</button>`:'<span style="color:#a0aec0">未填（車主自取或不需寄送）</span>'}</span></div>
+          <div class="kv"><b>地址</b><span>${b.addr?esc(b.addr):'<span style="color:#a0aec0">未填（車主自取或不需寄送）</span>'}</span>${b.addr?`<button class="cp" data-cp="${esc(b.addr)}">複製</button>`:''}</div>
           ${(b.contact||b.phone)?`<div class="kv"><b>聯絡</b><span>${esc(b.contact)} ${esc(b.phone)}</span></div>`:''}
           ${b.note?`<div class="kv"><b>備註</b><span>${esc(b.note)}</span></div>`:''}
         </div>`).join('')}
-        ${o.memo?`<div class="kv" style="margin-top:8px"><b>備忘</b><span>${esc(o.memo)}</span></div>`:''}
+        ${o.memo?`<div class="kv" style="margin-top:9px"><b>備忘</b><span>${esc(o.memo)}</span></div>`:''}
       </div></div>`;
   }).join('');
   return h;
@@ -609,9 +652,10 @@ function todosHtml(){
   h+=`<div class="add">
     <input id="ntext" placeholder="要做什麼？例：驗車逾期，約時間去監理站">
     <div class="two">
-      <select id="nowner"><option value="">不指定車主</option>${DB.owners.map(o=>`<option>${esc(o.name)}</option>`).join('')}</select>
+      <input id="nowner" placeholder="車主（可留白）" autocomplete="off" style="flex:1">
       <input id="ndue" type="date">
     </div>
+    <div class="pick"><div id="nownerList"></div></div>
     <button class="btn" id="nadd">＋ 新增代辦</button>
   </div>`;
   h+=`<div class="ttl">未完成 <span class="n">${open.length} 則</span></div>`;
@@ -622,6 +666,34 @@ function todosHtml(){
   }
   return h;
 }
+/* 車主搜尋：打姓名、公司或車牌都能找。68 位車主用下拉太難翻。 */
+function renderOwnerPick(kw){
+  const box=$('nownerList');
+  if(!box) return;
+  const k=String(kw||'').trim().toLowerCase();
+  if(!k){ box.innerHTML=''; return; }
+  const nk=norm(k);
+  const seen=new Set(); const out=[];
+  DB.owners.forEach(o=>{
+    if(seen.has(o.name)) return;
+    const plates=DB.vehicles.filter(v=>v.owner===o.name).map(v=>v.plate);
+    const hitName=(o.name||'').toLowerCase().includes(k);
+    const hitComp=(o.company||'').toLowerCase().includes(k);
+    const hitPlate=nk&&plates.some(p=>norm(p).includes(nk));
+    if(hitName||hitComp||hitPlate){
+      seen.add(o.name);
+      out.push({name:o.name,company:o.company||'',plates:plates.slice(0,3)});
+    }
+  });
+  if(!out.length){ box.innerHTML='<div class="picklist"><div class="pk-none">找不到「'+esc(kw)+'」</div></div>'; return; }
+  box.innerHTML='<div class="picklist">'+out.slice(0,8).map(o=>
+    `<button type="button" data-pick="${esc(o.name)}">${esc(o.name)}
+      <span class="pk-sub">${esc(o.company)}${o.plates.length?'　·　'+o.plates.map(esc).join('、'):''}</span>
+    </button>`).join('')
+    + (out.length>8?'<div class="pk-none">還有 '+(out.length-8)+' 位，再打幾個字縮小範圍</div>':'')
+    + '</div>';
+}
+
 function todoCard(t){
   const d=days(t.due);
   return `<div class="card"><div class="todo ${t.done?'done':''}" data-tid="${t.id}">
@@ -779,34 +851,46 @@ function dataHtml(){
   return h;
 }
 
+/* 只找車主姓名與車牌。
+   注意 norm() 會把中文去光變成空字串，而 '任何字串'.includes('') 是 true，
+   所以車牌比對一定要先確認正規化後還有內容，否則打中文會全部命中。 */
 function searchHtml(){
-  const k=kw, nk=norm(k), out=[];
-  const hit=s=>String(s||'').toLowerCase().includes(k);
-  DB.vehicles.filter(v=>hit(v.plate)||norm(v.plate).includes(nk)||hit(v.owner)||hit(v.company)||hit(v.brand))
-    .forEach(v=>out.push(['車輛',vehicleCard(v)]));
-  DB.owners.filter(o=>hit(o.name)||hit(o.company)||hit(o.phone)||
-      o.billing.some(b=>hit(b.name)||hit(b.taxId)||hit(b.addr)))
-    .forEach(o=>{
-      const bs=o.billing.filter(b=>hit(b.name)||hit(b.taxId)||hit(b.addr));
-      out.push(['車主',`<div class="card"><div class="nm">${esc(o.name)}</div>
+  const k=kw;
+  const nk=norm(k);
+  const hitName=s=>String(s||'').toLowerCase().includes(k);
+  const hitPlate=p=>nk!=='' && norm(p).includes(nk);
+
+  const vs=DB.vehicles.filter(v=>hitPlate(v.plate)||hitName(v.owner));
+  const os=DB.owners.filter(o=>hitName(o.name));
+
+  if(!vs.length && !os.length){
+    return `<div class="empty">找不到「${esc(kw)}」<br><br>可以打車主姓名或車牌。</div>`;
+  }
+
+  let h='';
+  if(os.length){
+    h+=`<div class="ttl">車主 <span class="n">${os.length} 位</span></div>`;
+    h+=os.map(o=>{
+      const plates=DB.vehicles.filter(v=>v.owner===o.name);
+      const nt=DB.todos.filter(t=>t.owner===o.name&&!t.done).length;
+      return `<div class="card"><div class="r1">
+        <div style="min-width:0"><div class="nm">${esc(o.name)}</div>
         <div class="sub">${esc(o.company)}${o.phone?'　·　'+esc(o.phone):''}</div>
-        ${(bs.length?bs:o.billing).map(b=>`<div style="margin-top:8px;padding-top:8px;border-top:1px solid var(--wash)">
-          <div style="font-weight:700;font-size:14px">${esc(b.name)}</div>
-          <div class="kv"><b>統編</b><span class="mono">${esc(b.taxId)}</span><button class="cp" data-cp="${esc(b.taxId)}">複製</button></div>
-          <div class="kv"><b>地址</b><span>${b.addr?esc(b.addr):'<span style="color:#a0aec0">未填</span>'}</span></div></div>`).join('')}
-        </div>`]);
-    });
-  DB.todos.filter(t=>hit(t.text)||hit(t.owner)||hit(t.plate)).forEach(t=>out.push(['代辦',todoCard(t)]));
-  DB.insurances.filter(i=>hit(i.owner)||hit(i.vehicle)||hit(i.insurer))
-    .forEach(i=>out.push(['保險',`<div class="card"><div class="nm mono">${esc(i.vehicle)}</div>
-      <div class="sub">${esc(i.owner)}　·　${esc(i.insurer)}　·　到期 ${esc(i.end)}</div></div>`]));
-  DB.books.filter(b=>hit(b.holder)||hit(b.prefix)||hit(b.start)||hit(b.end)||hit(b.company))
-    .forEach(b=>out.push(['發票本',`<div class="card"><div class="nm mono">${esc(b.prefix)} ${esc(b.start)}－${esc(b.end)}</div>
-      <div class="sub">${esc(b.month)}　·　${esc(b.company)}　·　${esc(b.holder)}</div></div>`]));
-  if(!out.length) return `<div class="empty">找不到「${esc(kw)}」。<br><br>可以試試車牌、車主姓名、公司名或統編。</div>`;
-  const by={};out.forEach(([g,html])=>(by[g]=by[g]||[]).push(html));
-  return Object.entries(by).map(([g,arr])=>
-    `<div class="ttl">${g} <span class="n">${arr.length} 筆</span></div>${arr.join('')}`).join('');
+        <div class="sub dim">車輛 ${plates.length} 台${plates.length?'：'+plates.map(v=>esc(v.plate)).join('、'):''}</div></div>
+        ${nt?`<span class="pill p-due">代辦 ${nt}</span>`:''}</div>
+        ${(o.billing||[]).map(b=>`<div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--wash)">
+          <div style="font-weight:700">${esc(b.name)}</div>
+          <div class="kv"><b>統編</b><span class="mono">${esc(b.taxId)||'—'}</span>${b.taxId?`<button class="cp" data-cp="${esc(b.taxId)}">複製</button>`:''}</div>
+          <div class="kv"><b>地址</b><span>${b.addr?esc(b.addr):'<span style="color:#a0aec0">未填</span>'}</span>${b.addr?`<button class="cp" data-cp="${esc(b.addr)}">複製</button>`:''}</div>
+        </div>`).join('')}
+      </div>`;
+    }).join('');
+  }
+  if(vs.length){
+    h+=`<div class="ttl">車輛 <span class="n">${vs.length} 台</span></div>`;
+    h+=vs.map(vehicleCard).join('');
+  }
+  return h;
 }
 
 /* ---------- 繪製 ---------- */
@@ -829,10 +913,18 @@ function render(){
   $('body').innerHTML=(map[page]||homeHtml)();
   const fp=$('dataFile');
   if(fp) fp.onchange=e=>importDataFile(e.target.files[0]);
+  const ow=$('nowner');
+  if(ow) ow.oninput=e=>renderOwnerPick(e.target.value);
   navOn();
 }
 
 $('body').addEventListener('click',e=>{
+  const gv=e.target.closest('[data-goveh]');
+  if(gv){ vStatus=gv.dataset.goveh; vCompany=''; go('vehicles'); return; }
+  const ov=e.target.closest('[data-ov]');
+  if(ov){ ownerView=ov.dataset.ov; render(); window.scrollTo(0,0); return; }
+  const pk=e.target.closest('[data-pick]');
+  if(pk){ $('nowner').value=pk.dataset.pick; $('nownerList').innerHTML=''; return; }
   const fsb=e.target.closest('[data-fs]');
   if(fsb){ applyFontSize(fsb.dataset.fs); render(); toast('字級：'+(FS_OPTS.find(x=>x[0]===fsb.dataset.fs)||[])[1]); return; }
   const gt=e.target.closest('[data-go]');
@@ -867,7 +959,12 @@ $('body').addEventListener('click',e=>{
     const tx=$('ntext').value.trim();
     if(!tx){$('ntext').focus();return;}
     const id='n'+Date.now();
-    DB.todos.push({id,owner:$('nowner').value,plate:'',text:tx,due:$('ndue').value,
+    let ow=$('nowner').value.trim();
+    let plate='';
+    // 打的是車牌就自動換成車主，車牌另外記著
+    const byPlate=DB.vehicles.find(v=>norm(v.plate)===norm(ow));
+    if(byPlate){ plate=byPlate.plate; ow=byPlate.owner||''; }
+    DB.todos.push({id,owner:ow,plate,text:tx,due:$('ndue').value,
       done:false,doneAt:'',createdAt:today,fromPhone:true});
     pending.push(id);
     sendBox=''; savePending(); saveData(); render();
