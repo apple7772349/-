@@ -135,6 +135,22 @@
   .todo.done .box{background:var(--ok);border-color:var(--ok)}
   .todo.done .nm{text-decoration:line-through;color:var(--muted);font-weight:400}
   .todo .nm{font-size:calc(17.5px * var(--k));font-weight:400;color:var(--slate);line-height:1.5}
+  .grp-head{display:flex;align-items:center;justify-content:space-between;gap:10px;
+    cursor:pointer;user-select:none}
+  .grp-name{font-size:calc(18px * var(--k));font-weight:700;color:var(--navy);min-width:0}
+  .grp-right{display:flex;align-items:center;gap:9px;flex-shrink:0}
+  .chev{color:var(--faint);font-size:calc(15px * var(--k));transition:transform .18s}
+  .chev.open{transform:rotate(180deg)}
+  .grp-body{margin-top:11px;padding-top:11px;border-top:1px solid var(--wash)}
+  .trow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;
+    border-bottom:1px solid var(--wash)}
+  .trow:last-of-type{border-bottom:none}
+  .tdel{border:1px solid #f3c7c7;background:#fff5f5;color:var(--danger);font-family:inherit;
+    font-size:calc(13px * var(--k));padding:5px 11px;border-radius:8px;flex-shrink:0}
+  .tdel:active{background:#fde0e0}
+  .qadd{background:var(--field);border-radius:10px;padding:11px;margin-top:11px}
+  .qadd input{width:100%;padding:11px;font-size:16px;font-family:inherit;
+    border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:#fff;color:inherit}
 
   .add{background:var(--card);border:1px solid var(--rule);border-radius:11px;padding:11px;margin-bottom:11px}
   .add input,.add select{width:100%;padding:10px;font-size:calc(16px * var(--k));font-family:inherit;
@@ -281,7 +297,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-09 第 3 版';
+const APP_VER='2026-09-09 第 4 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -322,6 +338,7 @@ function importDataFile(file){
     }
     const merged=Object.assign({},EMPTY,d);
     // 手機上還沒回傳電腦的代辦要留著，不能被新資料蓋掉
+    merged.todos=merged.todos.filter(t=>!removedIds.includes(t.id));
     const keep=(DB.todos||[]).filter(t=>pending.includes(t.id));
     keep.forEach(t=>{
       const i=merged.todos.findIndex(x=>x.id===t.id);
@@ -358,6 +375,8 @@ const TITLES={home:'綿豐手機系統',vehicles:'車輛',owners:'車主資料',
   ledgers:'流水帳',statements:'結算單',search:'搜尋結果',data:'資料'};
 
 let page='home', kw='', vCompany='', vStatus='', ownerView='here', pending=[], sendBox='';
+/* 代辦分組：哪些車主展開著、正在幫誰快速新增、手機上刪掉了哪些 */
+let todoOpen={}, addingFor=null, removedIds=[];
 
 /* localStorage 只是備援，不是保管處。iOS 對本機檔案的 localStorage
    不一定留得住，所以畫面會一直提醒你趕快傳回電腦。 */
@@ -366,6 +385,7 @@ function loadPending(){
   try{
     const raw=localStorage.getItem(LS); if(!raw)return;
     const o=JSON.parse(raw);
+    if(o&&Array.isArray(o.removed)) removedIds=o.removed;
     if(o&&o.stamp===DB.stamp&&Array.isArray(o.todos)){
       o.todos.forEach(t=>{
         const i=DB.todos.findIndex(x=>x.id===t.id);
@@ -378,15 +398,31 @@ function loadPending(){
 function savePending(){
   try{
     localStorage.setItem(LS,JSON.stringify({
-      stamp:DB.stamp, todos:DB.todos.filter(t=>pending.includes(t.id))
+      stamp:DB.stamp, todos:DB.todos.filter(t=>pending.includes(t.id)), removed:removedIds
     }));
   }catch(e){}
 }
+/* 刪除代辦。手機自己新增又還沒回傳的直接刪掉，電腦本來就不知道它；
+   從電腦來的要記進 removedIds，回傳時帶回去讓電腦決定要不要一起刪。 */
+function delPhoneTodo(id){
+  const t=DB.todos.find(x=>x.id===id);
+  if(!t) return;
+  if(!confirm('確定要刪掉這則代辦嗎？\n\n'+t.text)) return;
+  const bornOnPhone=t.fromPhone&&pending.includes(id);
+  DB.todos=DB.todos.filter(x=>x.id!==id);
+  pending=pending.filter(x=>x!==id);
+  if(!bornOnPhone&&!removedIds.includes(id)) removedIds.push(id);
+  sendBox='';
+  savePending(); saveData(); render();
+  toast(bornOnPhone?'已刪除':'已刪除，記得傳回電腦');
+}
+
 function buildSendText(){
   return JSON.stringify({
     type:'mienfeng-phone-todos',
     at:today,
-    todos:DB.todos.filter(t=>pending.includes(t.id))
+    todos:DB.todos.filter(t=>pending.includes(t.id)),
+    removed:removedIds
   });
 }
 
@@ -659,34 +695,94 @@ function ownersHtml(){
   return h;
 }
 
+/* 依車主分組的摺疊卡片。代辦一多，平鋪很難找。 */
+function todoRowHtml(t){
+  const d=days(t.due);
+  const meta=[];
+  if(t.plate) meta.push(esc(t.plate));
+  if(t.due&&!t.done) meta.push(esc(t.due));
+  if(t.done&&t.doneAt) meta.push(esc(t.doneAt)+' 完成');
+  return `<div class="trow">
+    <div class="todo ${t.done?'done':''}" data-tid="${esc(t.id)}" style="flex:1;min-width:0">
+      <div class="box">${t.done?'✓':''}</div>
+      <div style="flex:1;min-width:0">
+        <div class="nm">${esc(t.text)}</div>
+        ${meta.length?`<div class="sub dim">${meta.join('　·　')}</div>`:''}
+      </div>
+    </div>
+    ${t.done?'<span class="pill p-ok">已完成</span>':tag(d)}
+    <button class="tdel" data-tdel="${esc(t.id)}">刪</button>
+  </div>`;
+}
+
 function todosHtml(){
-  const open=DB.todos.filter(t=>!t.done).sort((a,b)=>{
-    const x=days(a.due),y=days(b.due);
-    if(x===null&&y===null)return 0; if(x===null)return 1; if(y===null)return -1; return x-y;});
+  const sortFn=(a,b)=>{const x=days(a.due),y=days(b.due);
+    if(x===null&&y===null)return 0; if(x===null)return 1; if(y===null)return -1; return x-y;};
+  const open=DB.todos.filter(t=>!t.done).sort(sortFn);
   const done=DB.todos.filter(t=>t.done);
+
   let h='';
-  if(pending.length){
+  if(pending.length||removedIds.length){
     h+=`<div class="pend">
-      <div style="font-weight:700;margin-bottom:6px">⚠ 有 ${pending.length} 則還沒傳回電腦</div>
-      <div style="margin-bottom:9px">在手機上新增或勾選的代辦，要傳回電腦才會進到系統裡。</div>
+      <div style="font-weight:700;margin-bottom:6px">⚠ 有 ${pending.length} 則異動${removedIds.length?'、'+removedIds.length+' 則刪除':''}還沒傳回電腦</div>
+      <div style="margin-bottom:9px">在手機上新增、勾選或刪掉的代辦，要傳回電腦才會進到系統裡。</div>
       <button class="btn g" data-go="data">去產生回傳文字</button>
     </div>`;
   }
-  h+=`<div class="add">
+
+  const groups=[];
+  open.forEach(t=>{
+    const key=t.owner||'';
+    let g=groups.find(x=>x.key===key);
+    if(!g){ g={key,rows:[]}; groups.push(g); }
+    g.rows.push(t);
+  });
+  groups.sort((a,b)=>(a.key?0:1)-(b.key?0:1)||a.key.localeCompare(b.key,'zh-Hant'));
+  // 只有一兩組時直接展開，不用多按一下
+  if(!Object.keys(todoOpen).length&&groups.length&&groups.length<=2){
+    groups.forEach(g=>{ todoOpen[g.key]=true; });
+  }
+
+  h+=`<div class="ttl">未完成 <span class="n">${open.length} 則　${groups.length} 位車主</span></div>`;
+  if(!groups.length) h+='<div class="empty">沒有未完成的代辦。</div>';
+  h+=groups.map(g=>{
+    const name=g.key||'未指定車主';
+    const isOpen=!!todoOpen[g.key];
+    const overdue=g.rows.filter(t=>{const d=days(t.due);return d!==null&&d<0;}).length;
+    return `<div class="card">
+      <div class="grp-head" data-grp="${esc(g.key)}">
+        <div class="grp-name">${esc(name)}</div>
+        <div class="grp-right">
+          ${overdue?`<span class="pill p-over">逾期 ${overdue}</span>`:''}
+          <span class="pill p-flat">${g.rows.length} 則</span>
+          <span class="chev ${isOpen?'open':''}">▾</span>
+        </div>
+      </div>
+      ${isOpen?`<div class="grp-body">
+        ${g.rows.map(todoRowHtml).join('')}
+        ${addingFor===g.key?`<div class="qadd">
+          <input id="qtext" placeholder="要做什麼？" autocomplete="off">
+          <div class="fld-lab">期限（可留白）</div>
+          <input id="qdue" type="date">
+          <button class="btn" data-qsave="${esc(g.key)}">新增到 ${esc(name)}</button>
+        </div>`:`<button class="more" data-addfor="${esc(g.key)}">＋ 幫 ${esc(name)} 新增一則</button>`}
+      </div>`:''}
+    </div>`;
+  }).join('');
+
+  h+=`<div class="ttl">新增給其他人</div>
+  <div class="add">
     <input id="ntext" placeholder="要做什麼？例：驗車逾期，約時間去監理站">
-    <div class="two" style="display:none">
-    </div>
     <input id="nowner" placeholder="車主或車牌（可留白）" autocomplete="off">
     <div class="pick"><div id="nownerList"></div></div>
     <div class="fld-lab">期限（可留白）</div>
     <input id="ndue" type="date">
     <button class="btn" id="nadd">＋ 新增代辦</button>
   </div>`;
-  h+=`<div class="ttl">未完成 <span class="n">${open.length} 則</span></div>`;
-  h+= open.length? open.map(t=>todoCard(t)).join('') : '<div class="empty">沒有未完成的代辦。</div>';
+
   if(done.length){
     h+=`<div class="ttl">已完成 <span class="n">${done.length} 則</span></div>`;
-    h+=done.map(t=>todoCard(t)).join('');
+    h+='<div class="card">'+done.map(todoRowHtml).join('')+'</div>';
   }
   return h;
 }
@@ -861,10 +957,10 @@ function dataHtml(){
     <input type="file" id="dataFile" accept=".json,application/json"
       style="width:100%;padding:10px;font-size:14px;border:1px solid var(--line);border-radius:8px;background:#fff">
   </div>`;
-  if(pending.length){
+  if(pending.length||removedIds.length){
     h+=`<div class="ttl">待回傳電腦</div>
     <div class="pend">
-      <div style="font-weight:700;margin-bottom:6px">有 ${pending.length} 則代辦還沒傳回去</div>
+      <div style="font-weight:700;margin-bottom:6px">有 ${pending.length} 則異動${removedIds.length?'、'+removedIds.length+' 則刪除':''}還沒傳回去</div>
       <button class="btn g" id="sendBack">產生回傳文字</button>
     </div>`;
     if(sendBox){
@@ -955,6 +1051,24 @@ $('body').addEventListener('click',e=>{
   if(pk){ $('nowner').value=pk.dataset.pick; $('nownerList').innerHTML=''; return; }
   const fsb=e.target.closest('[data-fs]');
   if(fsb){ applyFontSize(fsb.dataset.fs); render(); toast('字級：'+(FS_OPTS.find(x=>x[0]===fsb.dataset.fs)||[])[1]); return; }
+  const gh=e.target.closest('[data-grp]');
+  if(gh){ const k=gh.dataset.grp; todoOpen[k]=!todoOpen[k]; addingFor=null; render(); return; }
+  const af=e.target.closest('[data-addfor]');
+  if(af){ addingFor=af.dataset.addfor; render();
+    setTimeout(()=>{const i=$('qtext'); if(i){i.focus(); i.scrollIntoView({block:'center'});}},60); return; }
+  const qs=e.target.closest('[data-qsave]');
+  if(qs){
+    const tx=(($('qtext')||{}).value||'').trim();
+    if(!tx){ toast('請先寫要做什麼'); return; }
+    const id='n'+Date.now();
+    DB.todos.push({id,owner:qs.dataset.qsave,plate:'',text:tx,
+      due:($('qdue')||{}).value||'',done:false,doneAt:'',createdAt:today,fromPhone:true});
+    pending.push(id); addingFor=null; sendBox='';
+    savePending(); saveData(); render(); toast('已新增');
+    return;
+  }
+  const tdl=e.target.closest('[data-tdel]');
+  if(tdl){ delPhoneTodo(tdl.dataset.tdel); return; }
   const gt=e.target.closest('[data-go]');
   if(gt){go(gt.dataset.go);return;}
   const cp=e.target.closest('[data-cp]');
