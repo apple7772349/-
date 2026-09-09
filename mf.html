@@ -264,6 +264,9 @@ function copyText(txt,label){
 
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
+/* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
+const APP_VER='2026-09-09 第 1 版';
+
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
 const FS_OPTS=[['k-s','標準'],['k-m','大'],['k-l','特大'],['k-xl','最大'],['k-xxl','超大']];
@@ -810,7 +813,11 @@ function statementsHtml(){
 function dataHtml(){
   const has=DB.vehicles.length>0;
   const cur=currentFontSize();
-  let h=`<div class="ttl">畫面字級</div>
+  let h=`<div class="card" style="display:flex;justify-content:space-between;align-items:baseline;gap:10px">
+    <div class="nm" style="font-size:calc(15px * var(--k))">程式版本</div>
+    <div class="mono" style="font-weight:700;color:var(--navy)">${esc(APP_VER)}</div>
+  </div>
+  <div class="ttl">畫面字級</div>
   <div class="add">
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       ${FS_OPTS.map(([k,t])=>`<button class="chip ${k===cur?'on':''}" data-fs="${k}"
