@@ -362,7 +362,7 @@ function savePending(){
 function buildSendText(){
   return JSON.stringify({
     type:'mienfeng-phone-todos',
-    at:new Date().toISOString().slice(0,10),
+    at:today,
     todos:DB.todos.filter(t=>pending.includes(t.id))
   });
 }
@@ -696,7 +696,7 @@ function renderOwnerPick(kw){
 
 function todoCard(t){
   const d=days(t.due);
-  return `<div class="card"><div class="todo ${t.done?'done':''}" data-tid="${t.id}">
+  return `<div class="card"><div class="todo ${t.done?'done':''}" data-tid="${esc(t.id)}">
     <div class="box">${t.done?'✓':''}</div>
     <div style="flex:1;min-width:0">
       <div class="nm">${esc(t.text)}</div>
@@ -961,8 +961,10 @@ $('body').addEventListener('click',e=>{
     const id='n'+Date.now();
     let ow=$('nowner').value.trim();
     let plate='';
-    // 打的是車牌就自動換成車主，車牌另外記著
-    const byPlate=DB.vehicles.find(v=>norm(v.plate)===norm(ow));
+    // 打的是車牌就自動換成車主，車牌另外記著。
+    // 要先確認正規化後不是空字串，否則打中文車主名會誤配到車牌空白的車。
+    const nw=norm(ow);
+    const byPlate=nw?DB.vehicles.find(v=>norm(v.plate)===nw):null;
     if(byPlate){ plate=byPlate.plate; ow=byPlate.owner||''; }
     DB.todos.push({id,owner:ow,plate,text:tx,due:$('ndue').value,
       done:false,doneAt:'',createdAt:today,fromPhone:true});
