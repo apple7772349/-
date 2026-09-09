@@ -1,4 +1,13 @@
-<title>綿豐隨身查</title>
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<!-- 少了 viewport 的話 iOS 會用 980px 排版再整頁縮小，字會變超小 -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="綿豐手機系統">
+<title>綿豐手機系統</title>
 <style>
   :root{
     --navy:#1a365d; --slate:#2d3748; --muted:#718096; --faint:#a0aec0;
@@ -8,12 +17,13 @@
     --warn:#c05621; --warnBg:#fffaf0; --warnPill:#feebc8; --warnInk:#7b341e;
     --ok:#2f855a; --okPill:#c6f6d5; --okInk:#22543d;
     --font:-apple-system,BlinkMacSystemFont,"PingFang TC","Microsoft JhengHei","Noto Sans TC",sans-serif;
-    --k:1.45;
+    --k:1;
   }
   *{box-sizing:border-box}
   /* 字級開關：在「資料」頁可以切換，存在手機上 */
   /* 標準就是原本的「最大」，再往上三段 */
-  body.k1{--k:1.45} body.k2{--k:1.62} body.k3{--k:1.8} body.k4{--k:2}
+  /* viewport 修好之後不再被縮到 38%，倍率要跟著調回來 */
+  body.k1{--k:1} body.k2{--k:1.15} body.k3{--k:1.3} body.k4{--k:1.45}
   body{--tab-h:calc(70px * var(--k));
     background:var(--ground);color:var(--slate);font-family:var(--font);
     font-size:calc(17.5px * var(--k));line-height:1.62;-webkit-text-size-adjust:100%;
@@ -199,10 +209,12 @@
     *{transition:none!important;animation:none!important}
   }
 </style>
+</head>
+<body>
 
 <div class="hdr">
   <div class="hdr-row">
-    <h1 id="hTitle">綿豐隨身查</h1>
+    <h1 id="hTitle">綿豐手機系統</h1>
     <span class="stamp" id="hStamp"></span>
   </div>
   <input id="q" type="search" placeholder="搜尋車主姓名或車牌" autocomplete="off">
@@ -269,7 +281,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-09 第 2 版';
+const APP_VER='2026-09-09 第 3 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -341,7 +353,7 @@ const MORE=[
   {k:'statements',i:'📋',t:'結算單'},
   {k:'data',i:'💾',t:'資料'}
 ];
-const TITLES={home:'綿豐隨身查',vehicles:'車輛',owners:'車主資料',todos:'代辦事項',
+const TITLES={home:'綿豐手機系統',vehicles:'車輛',owners:'車主資料',todos:'代辦事項',
   insurances:'保險',checks:'支票',fuel:'油單發票',books:'發票本',loans:'貸款分期',
   ledgers:'流水帳',statements:'結算單',search:'搜尋結果',data:'資料'};
 
@@ -441,7 +453,7 @@ function homeHtml(){
       const d=days(t.due);
       h+=`<div class="rem ${t.due?(d<0?'over':'due'):''}"><div>
         <div class="rt">${esc(t.text)}</div>
-        <div class="rs">${esc(t.owner||'未指定車主')}${t.plate?'　·　'+esc(t.plate):''}${t.due?'　·　'+esc(t.due):''}</div>
+        <div class="rs">${esc(t.owner||'未指定車主')}${t.plate?'　·　'+esc(t.plate):''}${t.due?'　·　<span class="nb">'+esc(t.due)+'</span>':''}</div>
         </div>${tag(d)}</div>`;
     });
     if(fa.length) h+=`<div class="empty" style="padding:12px">還有 ${fa.length} 則未到期</div>`;
@@ -452,7 +464,7 @@ function homeHtml(){
   h+= vSoon.length? vSoon.map(({v,lb,d,date})=>
     `<div class="rem ${d<0?'over':'due'}"><div>
       <div class="rt">${esc(v.plate)} — ${esc(lb)}</div>
-      <div class="rs">${esc(v.owner)}　·　${esc(v.company)}　·　${esc(date)}</div>
+      <div class="rs">${esc(v.owner)}　·　${esc(v.company)}　·　<span class="nb">${esc(date)}</span></div>
      </div>${tag(d)}</div>`).join('')
     :'<div class="empty">30 天內沒有到期的車輛資料。</div>';
 
@@ -460,7 +472,7 @@ function homeHtml(){
   h+= insSoon.length? insSoon.map(({i,d})=>
     `<div class="rem ${d<0?'over':'due'}"><div>
       <div class="rt">${esc(i.vehicle)} ${esc(i.owner)}</div>
-      <div class="rs">${esc(i.insurer)}　·　到期 ${esc(i.end)}</div>
+      <div class="rs">${esc(i.insurer)}　·　<span class="nb">到期 ${esc(i.end)}</span></div>
      </div>${tag(d)}</div>`).join('')
     :'<div class="empty">60 天內沒有到期保單。</div>';
 
@@ -468,7 +480,7 @@ function homeHtml(){
   h+= chkSoon.length? chkSoon.map(({c,d,side})=>
     `<div class="rem ${d<0?'over':'due'}"><div>
       <div class="rt">${side==='付'?'應付':'應收'}　${esc(c.payee||c.payer)}</div>
-      <div class="rs">${esc(c.content||(c.bank+' '+c.checkNo))}　·　${esc(c.due)}</div>
+      <div class="rs">${esc(c.content||(c.bank+' '+c.checkNo))}　·　<span class="nb">${esc(c.due)}</span></div>
      </div><div style="text-align:right"><div class="amt ${side==='付'?'pos':'neg'}">${money(c.amount)}</div>${tag(d)}</div></div>`).join('')
     :'<div class="empty">30 天內沒有支票到期。</div>';
   return h;
@@ -915,7 +927,7 @@ function render(){
     insurances:insurancesHtml,checks:checksHtml,fuel:fuelHtml,books:booksHtml,
     loans:loansHtml,ledgers:ledgersHtml,statements:statementsHtml,search:searchHtml,
     data:dataHtml};
-  $('hTitle').textContent=TITLES[page]||'綿豐隨身查';
+  $('hTitle').textContent=TITLES[page]||'綿豐手機系統';
   if(!DB.vehicles.length && !DB.owners.length && page!=='data'){
     $('body').innerHTML=`<div class="card" style="text-align:center;padding:28px 16px">
       <div style="font-size:34px;margin-bottom:10px">💾</div>
@@ -993,3 +1005,5 @@ applyFontSize(currentFontSize());
 loadPending();
 render();
 </script>
+</body>
+</html>
