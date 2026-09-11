@@ -297,7 +297,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-09 第 4 版';
+const APP_VER='2026-09-11 第 5 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -839,12 +839,15 @@ function insurancesHtml(){
 }
 
 function checksHtml(){
-  const f=(arr,side)=>arr.slice().sort((a,b)=>(days(a.due)??9e9)-(days(b.due)??9e9)).map(c=>
-    `<div class="card"><div class="r1">
+  // 還沒兌現的在上面、已兌現的沉到下面，各自照兌現日（跟電腦版一樣）。
+  // 已兌現的不掛到期標籤，不然舊票會顯示「已過期」
+  const done=c=>c.status==='cleared';
+  const f=(arr,side)=>arr.slice().sort((a,b)=>(done(a)-done(b))||((days(a.due)??9e9)-(days(b.due)??9e9))).map(c=>
+    `<div class="card"${done(c)?' style="opacity:.6"':''}><div class="r1">
       <div style="min-width:0"><div class="nm">${esc(c.payee||c.payer)}</div>
       <div class="sub">${esc(c.content||(c.bank+' 票號 '+c.checkNo))}</div>
       <div class="kv"><b>兌現</b><span class="mono">${esc(c.due)||'—'}</span></div></div>
-      <div style="text-align:right"><div class="amt ${side==='out'?'pos':'neg'}">${money(c.amount)}</div>${tag(days(c.due))}</div>
+      <div style="text-align:right"><div class="amt ${side==='out'?'pos':'neg'}">${money(c.amount)}</div>${done(c)?`<span class="pill p-ok">${side==='out'?'已入甲存':'已兌現'}</span>`:tag(days(c.due))}</div>
     </div></div>`).join('');
   const sum=(arr)=>arr.filter(c=>c.status!=='cleared').reduce((s,c)=>s+Number(c.amount||0),0);
   return `<div class="grid" style="margin-bottom:4px">
