@@ -297,7 +297,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-11 第 5 版';
+const APP_VER='2026-09-11 第 6 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -337,7 +337,24 @@ function importDataFile(file){
       toast('這不是綿豐的資料檔'); return;
     }
     const merged=Object.assign({},EMPTY,d);
-    // 手機上還沒回傳電腦的代辦要留著，不能被新資料蓋掉
+    const pcHas=id=>merged.todos.find(x=>x.id===id);
+    // 電腦回報收過的那一批（編號對得上）
+    const acked=!!(lastSend&&d.phoneAck&&d.phoneAck===lastSend.sid);
+    const before=pending.length+removedIds.length;
+    /* 已經進電腦的就不用再傳：內容跟電腦一樣，或電腦收過這批而且手機之後沒再改。
+       後者也讓電腦後來改過的版本回到手機，不會被手機的舊內容再傳回去蓋掉 */
+    pending=pending.filter(id=>{
+      const mine=DB.todos.find(x=>x.id===id); if(!mine) return false;
+      const pc=pcHas(id);
+      if(pc&&todoKey(pc)===todoKey(mine)) return false;
+      if(acked&&lastSend.todos[id]===todoKey(mine)) return false;
+      return true;
+    });
+    // 手機刪掉的：電腦已經沒有了，或電腦處理過這批（選了不刪），都不用再記
+    removedIds=removedIds.filter(id=>pcHas(id)&&!(acked&&lastSend.removed.includes(id)));
+    if(acked) lastSend=null;
+    const cleared=before-pending.length-removedIds.length;
+    // 剩下的才是真的還沒傳回去：刪掉的先藏著，改過的蓋上手機的版本
     merged.todos=merged.todos.filter(t=>!removedIds.includes(t.id));
     const keep=(DB.todos||[]).filter(t=>pending.includes(t.id));
     keep.forEach(t=>{
@@ -345,8 +362,12 @@ function importDataFile(file){
       if(i>-1) merged.todos[i]=t; else merged.todos.push(t);
     });
     DB=merged;
+    sendBox='';
     if(saveData()){
-      toast('匯入完成：車輛 '+DB.vehicles.length+' 台'+(keep.length?'，保留 '+keep.length+' 則未回傳代辦':''));
+      savePending();   // 用新資料的 stamp 重存，重開程式後沒回傳的才不會不見
+      toast('匯入完成：車輛 '+DB.vehicles.length+' 台'+
+        (cleared>0?'，電腦已收到 '+cleared+' 則':'')+
+        (keep.length?'，保留 '+keep.length+' 則未回傳代辦':''));
       go('home');
     }
   };
@@ -377,6 +398,11 @@ const TITLES={home:'綿豐手機系統',vehicles:'車輛',owners:'車主資料',
 let page='home', kw='', vCompany='', vStatus='', ownerView='here', pending=[], sendBox='';
 /* 代辦分組：哪些車主展開著、正在幫誰快速新增、手機上刪掉了哪些 */
 let todoOpen={}, addingFor=null, removedIds=[];
+/* 最後一次產生回傳文字送出的內容：{sid, todos:{id:內容}, removed:[...]}。
+   電腦匯入後會記下 sid、下次匯出時帶回來，對得上就表示這批已經進電腦 */
+let lastSend=null;
+// 比對代辦內容用。電腦只收新增和完成與否，比這幾欄就夠
+const todoKey=t=>[t.text,t.owner,t.plate,t.due,!!t.done].join('\u0001');
 
 /* localStorage 只是備援，不是保管處。iOS 對本機檔案的 localStorage
    不一定留得住，所以畫面會一直提醒你趕快傳回電腦。 */
@@ -386,6 +412,7 @@ function loadPending(){
     const raw=localStorage.getItem(LS); if(!raw)return;
     const o=JSON.parse(raw);
     if(o&&Array.isArray(o.removed)) removedIds=o.removed;
+    if(o&&o.sent&&o.sent.sid) lastSend=o.sent;
     if(o&&o.stamp===DB.stamp&&Array.isArray(o.todos)){
       o.todos.forEach(t=>{
         const i=DB.todos.findIndex(x=>x.id===t.id);
@@ -398,7 +425,7 @@ function loadPending(){
 function savePending(){
   try{
     localStorage.setItem(LS,JSON.stringify({
-      stamp:DB.stamp, todos:DB.todos.filter(t=>pending.includes(t.id)), removed:removedIds
+      stamp:DB.stamp, todos:DB.todos.filter(t=>pending.includes(t.id)), removed:removedIds, sent:lastSend
     }));
   }catch(e){}
 }
@@ -418,10 +445,16 @@ function delPhoneTodo(id){
 }
 
 function buildSendText(){
+  // 每產生一次就換一個編號，並記住這次送了什麼，之後拿來跟電腦對帳
+  const todos=DB.todos.filter(t=>pending.includes(t.id));
+  const sid=Date.now().toString(36)+Math.random().toString(36).slice(2,6);
+  lastSend={sid, todos:Object.fromEntries(todos.map(t=>[t.id,todoKey(t)])), removed:removedIds.slice()};
+  savePending();
   return JSON.stringify({
     type:'mienfeng-phone-todos',
+    sid,
     at:today,
-    todos:DB.todos.filter(t=>pending.includes(t.id)),
+    todos,
     removed:removedIds
   });
 }
