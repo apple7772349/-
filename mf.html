@@ -145,12 +145,16 @@
   .trow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;
     border-bottom:1px solid var(--wash)}
   .trow:last-of-type{border-bottom:none}
-  .tdel{border:1px solid #f3c7c7;background:#fff5f5;color:var(--danger);font-family:inherit;
+  .tdel,.tedit{border:1px solid #f3c7c7;background:#fff5f5;color:var(--danger);font-family:inherit;
     font-size:calc(13px * var(--k));padding:5px 11px;border-radius:8px;flex-shrink:0}
   .tdel:active{background:#fde0e0}
+  .tedit{border-color:var(--line);background:#fff;color:var(--slate)}
+  .tedit:active{background:var(--field)}
   .qadd{background:var(--field);border-radius:10px;padding:11px;margin-top:11px}
-  .qadd input{width:100%;padding:11px;font-size:16px;font-family:inherit;
+  .qadd input,.qadd textarea{width:100%;padding:11px;font-size:16px;font-family:inherit;
     border:1px solid var(--line);border-radius:8px;margin-bottom:8px;background:#fff;color:inherit}
+  .qadd textarea{resize:none;line-height:1.45}
+  .qadd .row2{display:flex;gap:8px}
 
   .add{background:var(--card);border:1px solid var(--rule);border-radius:11px;padding:11px;margin-bottom:11px}
   .add input,.add select{width:100%;padding:10px;font-size:calc(16px * var(--k));font-family:inherit;
@@ -171,6 +175,7 @@
   .btn{width:100%;padding:11px;font-size:calc(15px * var(--k));font-weight:700;font-family:inherit;
     border:none;border-radius:8px;background:var(--navy);color:#fff}
   .btn.g{background:var(--ok)}
+  .btn.ghost{background:#fff;color:var(--slate);border:1px solid var(--line)}
   .pend{background:var(--warnBg);border:1px solid #fbd38d;border-radius:10px;
     padding:10px 12px;margin-bottom:10px;font-size:calc(13px * var(--k));color:#7b4b12}
 
@@ -297,7 +302,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-11 第 6 版';
+const APP_VER='2026-09-13 第 7 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -353,6 +358,7 @@ function importDataFile(file){
     // 手機刪掉的：電腦已經沒有了，或電腦處理過這批（選了不刪），都不用再記
     removedIds=removedIds.filter(id=>pcHas(id)&&!(acked&&lastSend.removed.includes(id)));
     if(acked) lastSend=null;
+    Object.keys(origs).forEach(k=>{ if(!pending.includes(k)) delete origs[k]; });
     const cleared=before-pending.length-removedIds.length;
     // 剩下的才是真的還沒傳回去：刪掉的先藏著，改過的蓋上手機的版本
     merged.todos=merged.todos.filter(t=>!removedIds.includes(t.id));
@@ -397,7 +403,10 @@ const TITLES={home:'綿豐手機系統',vehicles:'車輛',owners:'車主資料',
 
 let page='home', kw='', vCompany='', vStatus='', ownerView='here', pending=[], sendBox='';
 /* 代辦分組：哪些車主展開著、正在幫誰快速新增、手機上刪掉了哪些 */
-let todoOpen={}, addingFor=null, removedIds=[];
+let todoOpen={}, addingFor=null, removedIds=[], editingTodo=null;
+/* 手機第一次改某則電腦來的代辦時，記下它原本的樣子（id → 內容）。
+   回傳時一起送，電腦只套用手機真的改過的欄位，電腦自己改的不會被蓋掉 */
+let origs={};
 /* 最後一次產生回傳文字送出的內容：{sid, todos:{id:內容}, removed:[...]}。
    電腦匯入後會記下 sid、下次匯出時帶回來，對得上就表示這批已經進電腦 */
 let lastSend=null;
@@ -414,6 +423,7 @@ function loadPending(){
     if(o&&Array.isArray(o.removed)) removedIds=o.removed;
     if(o&&o.sent&&o.sent.sid) lastSend=o.sent;
     if(o&&o.stamp===DB.stamp&&Array.isArray(o.todos)){
+      if(o.origs&&typeof o.origs==='object') origs=o.origs;
       o.todos.forEach(t=>{
         const i=DB.todos.findIndex(x=>x.id===t.id);
         if(i>-1)DB.todos[i]=t; else DB.todos.push(t);
@@ -425,7 +435,7 @@ function loadPending(){
 function savePending(){
   try{
     localStorage.setItem(LS,JSON.stringify({
-      stamp:DB.stamp, todos:DB.todos.filter(t=>pending.includes(t.id)), removed:removedIds, sent:lastSend
+      stamp:DB.stamp, todos:DB.todos.filter(t=>pending.includes(t.id)), removed:removedIds, sent:lastSend, origs
     }));
   }catch(e){}
 }
@@ -437,11 +447,40 @@ function delPhoneTodo(id){
   if(!confirm('確定要刪掉這則代辦嗎？\n\n'+t.text)) return;
   const bornOnPhone=t.fromPhone&&pending.includes(id);
   DB.todos=DB.todos.filter(x=>x.id!==id);
-  pending=pending.filter(x=>x!==id);
+  pending=pending.filter(x=>x!==id); delete origs[id];
   if(!bornOnPhone&&!removedIds.includes(id)) removedIds.push(id);
   sendBox='';
   savePending(); saveData(); render();
   toast(bornOnPhone?'已刪除':'已刪除，記得傳回電腦');
+}
+
+/* 標成待回傳。電腦來的代辦第一次在手機上改時，先記下原本的樣子；
+   手機自己新增的，電腦只從手機收過，不用記 */
+function markPending(t){
+  if(pending.includes(t.id)) return;
+  pending.push(t.id);
+  if(!t.fromPhone) origs[t.id]={text:t.text||'',owner:t.owner||'',plate:t.plate||'',due:t.due||'',done:!!t.done};
+}
+
+/* 儲存修改。車主欄打車牌就換成那台車的車主；只填車牌沒填車主，也從車輛帶出車主 */
+function saveTodoEdit(id){
+  const t=DB.todos.find(x=>x.id===id);
+  editingTodo=null;
+  if(!t){ render(); return; }
+  const text=(($('etext')||{}).value||'').trim();
+  if(!text){ editingTodo=id; toast('內容不能空白'); return; }
+  let owner=(($('eowner')||{}).value||'').trim();
+  let plate=(($('eplate')||{}).value||'').trim();
+  const nw=norm(owner), np=norm(plate);
+  const byOwner=nw?DB.vehicles.find(v=>norm(v.plate)===nw):null;
+  if(byOwner){ plate=byOwner.plate; owner=byOwner.owner||''; }
+  else if(!owner&&np){ const v=DB.vehicles.find(x=>norm(x.plate)===np); if(v) owner=v.owner||''; }
+  const due=($('edue')||{}).value||'';
+  if(text===t.text&&owner===(t.owner||'')&&plate===(t.plate||'')&&due===(t.due||'')){ render(); return; }
+  markPending(t);
+  Object.assign(t,{text,owner,plate,due});
+  sendBox=''; savePending(); saveData(); render();
+  toast('已修改，記得傳回電腦');
 }
 
 function buildSendText(){
@@ -455,6 +494,7 @@ function buildSendText(){
     sid,
     at:today,
     todos,
+    orig:Object.fromEntries(todos.filter(t=>origs[t.id]).map(t=>[t.id,origs[t.id]])),
     removed:removedIds
   });
 }
@@ -730,6 +770,7 @@ function ownersHtml(){
 
 /* 依車主分組的摺疊卡片。代辦一多，平鋪很難找。 */
 function todoRowHtml(t){
+  if(editingTodo===t.id) return todoEditHtml(t);
   const d=days(t.due);
   const meta=[];
   if(t.plate) meta.push(esc(t.plate));
@@ -744,7 +785,27 @@ function todoRowHtml(t){
       </div>
     </div>
     ${t.done?'<span class="pill p-ok">已完成</span>':tag(d)}
+    <button class="tedit" data-tedit="${esc(t.id)}">改</button>
     <button class="tdel" data-tdel="${esc(t.id)}">刪</button>
+  </div>`;
+}
+
+/* 原地展開的修改表單。Enter 不換行（注音選字時的 Enter 不擋） */
+function todoEditHtml(t){
+  return `<div class="qadd">
+    <div class="fld-lab">要做什麼</div>
+    <textarea id="etext" rows="2" onkeydown="if(event.key==='Enter'&&!event.isComposing)event.preventDefault()">${esc(t.text)}</textarea>
+    <div class="fld-lab">車主（也可以打車牌）</div>
+    <input id="eowner" value="${esc(t.owner||'')}" autocomplete="off">
+    <div class="pick"><div id="eownerList"></div></div>
+    <div class="fld-lab">車牌（可留白）</div>
+    <input id="eplate" value="${esc(t.plate||'')}" autocomplete="off">
+    <div class="fld-lab">期限（可留白）</div>
+    <input id="edue" type="date" value="${esc(t.due||'')}">
+    <div class="row2">
+      <button class="btn ghost" data-ecancel="1">取消</button>
+      <button class="btn" data-esave="${esc(t.id)}">儲存</button>
+    </div>
   </div>`;
 }
 
@@ -758,7 +819,7 @@ function todosHtml(){
   if(pending.length||removedIds.length){
     h+=`<div class="pend">
       <div style="font-weight:700;margin-bottom:6px">⚠ 有 ${pending.length} 則異動${removedIds.length?'、'+removedIds.length+' 則刪除':''}還沒傳回電腦</div>
-      <div style="margin-bottom:9px">在手機上新增、勾選或刪掉的代辦，要傳回電腦才會進到系統裡。</div>
+      <div style="margin-bottom:9px">在手機上新增、修改、勾選或刪掉的代辦，要傳回電腦才會進到系統裡。</div>
       <button class="btn g" data-go="data">去產生回傳文字</button>
     </div>`;
   }
@@ -820,8 +881,9 @@ function todosHtml(){
   return h;
 }
 /* 車主搜尋：打姓名、公司或車牌都能找。68 位車主用下拉太難翻。 */
-function renderOwnerPick(kw){
-  const box=$('nownerList');
+function renderOwnerPick(kw,target){
+  target=target||'nowner';   // 新增用 nowner、修改表單用 eowner；清單的 id 是它後面加 List
+  const box=$(target+'List');
   if(!box) return;
   const k=String(kw||'').trim().toLowerCase();
   if(!k){ box.innerHTML=''; return; }
@@ -840,7 +902,7 @@ function renderOwnerPick(kw){
   });
   if(!out.length){ box.innerHTML='<div class="picklist"><div class="pk-none">找不到「'+esc(kw)+'」</div></div>'; return; }
   box.innerHTML='<div class="picklist">'+out.slice(0,8).map(o=>
-    `<button type="button" data-pick="${esc(o.name)}">${esc(o.name)}
+    `<button type="button" data-pick="${esc(o.name)}" data-pickfor="${target}">${esc(o.name)}
       <span class="pk-sub">${esc(o.company)}${o.plates.length?'　·　'+o.plates.map(esc).join('、'):''}</span>
     </button>`).join('')
     + (out.length>8?'<div class="pk-none">還有 '+(out.length-8)+' 位，再打幾個字縮小範圍</div>':'')
@@ -1075,6 +1137,8 @@ function render(){
   if(fp) fp.onchange=e=>importDataFile(e.target.files[0]);
   const ow=$('nowner');
   if(ow) ow.oninput=e=>renderOwnerPick(e.target.value);
+  const eo=$('eowner');
+  if(eo) eo.oninput=e=>renderOwnerPick(e.target.value,'eowner');
   navOn();
 }
 
@@ -1084,13 +1148,13 @@ $('body').addEventListener('click',e=>{
   const ov=e.target.closest('[data-ov]');
   if(ov){ ownerView=ov.dataset.ov; render(); window.scrollTo(0,0); return; }
   const pk=e.target.closest('[data-pick]');
-  if(pk){ $('nowner').value=pk.dataset.pick; $('nownerList').innerHTML=''; return; }
+  if(pk){ const tg=pk.dataset.pickfor||'nowner'; $(tg).value=pk.dataset.pick; $(tg+'List').innerHTML=''; return; }
   const fsb=e.target.closest('[data-fs]');
   if(fsb){ applyFontSize(fsb.dataset.fs); render(); toast('字級：'+(FS_OPTS.find(x=>x[0]===fsb.dataset.fs)||[])[1]); return; }
   const gh=e.target.closest('[data-grp]');
-  if(gh){ const k=gh.dataset.grp; todoOpen[k]=!todoOpen[k]; addingFor=null; render(); return; }
+  if(gh){ const k=gh.dataset.grp; todoOpen[k]=!todoOpen[k]; addingFor=null; editingTodo=null; render(); return; }
   const af=e.target.closest('[data-addfor]');
-  if(af){ addingFor=af.dataset.addfor; render();
+  if(af){ addingFor=af.dataset.addfor; editingTodo=null; render();
     setTimeout(()=>{const i=$('qtext'); if(i){i.focus(); i.scrollIntoView({block:'center'});}},60); return; }
   const qs=e.target.closest('[data-qsave]');
   if(qs){
@@ -1103,6 +1167,12 @@ $('body').addEventListener('click',e=>{
     savePending(); saveData(); render(); toast('已新增');
     return;
   }
+  const te=e.target.closest('[data-tedit]');
+  if(te){ editingTodo=te.dataset.tedit; addingFor=null; render();
+    setTimeout(()=>{const i=$('etext'); if(i){i.focus(); i.scrollIntoView({block:'center'});}},60); return; }
+  if(e.target.closest('[data-ecancel]')){ editingTodo=null; render(); return; }
+  const es=e.target.closest('[data-esave]');
+  if(es){ saveTodoEdit(es.dataset.esave); return; }
   const tdl=e.target.closest('[data-tdel]');
   if(tdl){ delPhoneTodo(tdl.dataset.tdel); return; }
   const gt=e.target.closest('[data-go]');
@@ -1124,8 +1194,8 @@ $('body').addEventListener('click',e=>{
   const td=e.target.closest('[data-tid]');
   if(td){
     const t=DB.todos.find(x=>x.id===td.dataset.tid);
+    markPending(t);   // 先記下原本的樣子再改
     t.done=!t.done; t.doneAt=t.done?today:'';
-    if(!pending.includes(t.id))pending.push(t.id);
     sendBox=''; savePending(); saveData(); render(); return;
   }
   if(e.target.id==='sendBack'){
