@@ -70,6 +70,15 @@
   .vbox.i{background:#f0f7ff;border-color:#d6e7f8}
   .vbox.s{background:#f0fbf4;border-color:#cfeeda}
   .vbox.p{background:#f7f2fd;border-color:#e2d6f5}
+  /* 行照：三年才換一次，一行就好不佔一格；淡橘底跟驗車（藍）、保險（綠）分開 */
+  .vlic{display:flex;align-items:center;gap:10px;margin-top:9px;padding:9px 12px;border-radius:11px;
+    background:#fff8ec;border:1px solid #f6e0b5}
+  .vlic .lab{font-size:calc(13.5px * var(--k));color:#8a5a14;flex-shrink:0}
+  .vlic .val{font-size:calc(17px * var(--k));font-weight:700;font-variant-numeric:tabular-nums;color:var(--slate)}
+  .vlic .val.warn{color:#b45309}
+  .vlic .val.bad{color:var(--danger)}
+  .vlic .val.na{color:var(--faint);font-weight:400}
+  .vlic .pill{margin-left:auto}
   .vbox.wide{grid-column:1 / -1}
   /* 字級一大，兩欄放不下 2026-10-12 這種長度，改成上下排 */
   body.k3 .vgrid, body.k4 .vgrid{grid-template-columns:1fr}
@@ -302,7 +311,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-13 第 7 版';
+const APP_VER='2026-09-14 第 8 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -534,7 +543,7 @@ function homeHtml(){
                  .filter(x=>x.c.status!=='cleared'&&x.d!==null&&x.d<=30).sort((a,b)=>a.d-b.d);
   const vSoon=[];
   act.forEach(v=>{
-    [['nextDate','驗車'],['insuranceDate','保險'],['passDate','通行證']].forEach(([f,lb])=>{
+    [['nextDate','驗車'],['insuranceDate','保險'],['passDate','通行證'],['licenseDate','行照']].forEach(([f,lb])=>{
       const d=days(v[f]); if(d!==null&&d<=30) vSoon.push({v,lb,d,date:v[f]});
     });
   });
@@ -611,7 +620,7 @@ function ownerLeft(name){
   return vs.every(v=>GONE.includes(v.special||'無'));
 }
 const inactive=v=>SPECIALS.includes(v.special||'無');
-const hasRemind=v=>!inactive(v)&&[v.nextDate,v.insuranceDate,v.passDate]
+const hasRemind=v=>!inactive(v)&&[v.nextDate,v.insuranceDate,v.passDate,v.licenseDate]
   .some(x=>{const d=days(x);return d!==null&&d<=30;});
 
 // 跟桌面版同一套規則
@@ -680,13 +689,24 @@ function vehiclesHtml(){
   return h;
 }
 
+/* 行照一行。30 天內到期或已過期才掛「剩幾天」；不在籍又沒填的就不顯示 */
+function licLine(v){
+  const off=v.special&&v.special!=='無';
+  if(off&&!v.licenseDate) return '';
+  const d=days(v.licenseDate);
+  const cv=d===null?'na':(d<0?'bad':(d<=30?'warn':''));
+  return `<div class="vlic"><span class="lab">行照</span>
+    <span class="val ${cv}">${v.licenseDate?esc(v.licenseDate):'未填'}</span>
+    ${d!==null&&d<=30?tag(d):''}</div>`;
+}
+
 function vehicleCard(v){
   const off=v.special&&v.special!=='無';
   // 左邊那條的顏色照最急的那個日期決定
   let edge='edge-ok';
   if(off) edge='edge-off';
   else{
-    const ds=[v.nextDate,v.insuranceDate,v.passDate].map(days).filter(x=>x!==null);
+    const ds=[v.nextDate,v.insuranceDate,v.passDate,v.licenseDate].map(days).filter(x=>x!==null);
     const min=ds.length?Math.min(...ds):null;
     if(min===null) edge='edge-ok';
     else if(min<0) edge='edge-over';
@@ -722,6 +742,7 @@ function vehicleCard(v){
         ${esc(v.sStart)||'—'}${v.sEnd&&v.sEnd!==v.sStart?' ~ '+esc(v.sEnd):''}</div>
     </div>`:''}
   </div>
+  ${licLine(v)}
   ${v.notes?`<div class="kv"><b>備註</b><span style="white-space:pre-line">${esc(v.notes)}</span></div>`:''}</div>`;
 }
 
