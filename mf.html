@@ -311,7 +311,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-14 第 8 版';
+const APP_VER='2026-09-15 第 9 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -606,7 +606,7 @@ function homeHtml(){
 
 const COMPANIES=['綿豐(頭)','銓豐(頭)','綿豐貨運(頭)','綿豐(尾)','銓豐(尾)','綿豐貨運(尾)'];
 const SPECIALS=['停駛','扣牌','報廢','過戶','牌照註銷'];
-const STATUS_OPTS=[['','一般車輛'],['due','30天內提醒'],['odIns','驗車逾期'],['odIsr','保險逾期'],
+const STATUS_OPTS=[['','一般車輛'],['due','30天內提醒'],['odIns','驗車逾期'],['odIsr','保險逾期'],['odLic','行照逾期'],
   ['完成','完成'],['待驗','待驗'],...SPECIALS.map(s=>[s,s])];
 const kind=c=>String(c||'').includes('(尾)')?'車尾':'車頭';
 
@@ -631,6 +631,7 @@ function matchStatus(v,st){
   if(st==='due') return hasRemind(v);
   if(st==='odIns') return !inactive(v)&&isOverdue(v,'nextDate');
   if(st==='odIsr') return !inactive(v)&&isOverdue(v,'insuranceDate');
+  if(st==='odLic') return !inactive(v)&&isOverdue(v,'licenseDate');
   if(SPECIALS.includes(st)) return (v.special||'無')===st;
   if(st==='待驗'&&inactive(v)) return false;
   return (v.status||'完成')===st;
@@ -647,7 +648,7 @@ function vehiclesHtml(){
   /* 這三個數字用「同一家公司的一般車輛」當基準，不跟著狀態篩選跑，
      不然點進「還沒驗車」之後另外兩個數字就變成交集，看了會誤會。 */
   const base=DB.vehicles.filter(v=>(!vCompany||v.company===vCompany)&&!inactive(v));
-  const due=base.filter(v=>hasRemind(v)).length;
+  const noLic=base.filter(v=>isOverdue(v,'licenseDate')).length;
   const noInspect=base.filter(v=>isOverdue(v,'nextDate')).length;
   const noInsure=base.filter(v=>isOverdue(v,'insuranceDate')).length;
 
@@ -661,8 +662,9 @@ function vehiclesHtml(){
   <div class="grid" style="margin-bottom:4px">
     <div class="stat"><div class="l">符合 · 車頭/車尾</div>
       <div class="v">${list.length} <span style="font-size:14px;color:var(--muted);font-weight:400">（${heads}/${list.length-heads}）</span></div></div>
-    <div class="stat"><div class="l">30 天內到期</div>
-      <div class="v" style="color:${due?'var(--warn)':'var(--navy)'}">${due}</div></div>
+    <div class="stat" data-vs="odLic" style="cursor:pointer">
+      <div class="l">行照逾期 <span style="color:var(--faint)">點看名單</span></div>
+      <div class="v" style="color:${noLic?'var(--danger)':'var(--ok)'}">${noLic}</div></div>
     <div class="stat" data-vs="odIns" style="cursor:pointer">
       <div class="l">還沒驗車 <span style="color:var(--faint)">點看名單</span></div>
       <div class="v" style="color:${noInspect?'var(--danger)':'var(--ok)'}">${noInspect}</div></div>
