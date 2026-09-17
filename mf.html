@@ -311,7 +311,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-15 第 9 版';
+const APP_VER='2026-09-17 第 10 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -1008,14 +1008,22 @@ function booksHtml(){
 function loansHtml(){
   return `<div class="ttl">💰 貸款分期 <span class="n">${DB.loans.length} 筆</span></div>`+
     (DB.loans.length?DB.loans.map(l=>{
-      const total=l.terms*l.per, paid=l.paid*l.per;
+      // 金額以電腦算好的為準；舊版匯出的資料沒有這些欄位，才退回用期數×每期
+      const n=v=>Number(v)||0;
+      const has=v=>v!==undefined&&v!==null&&v!=='';
+      const total=has(l.total)?n(l.total):n(l.terms)*n(l.per);
+      const paidAmt=has(l.paidAmt)?n(l.paidAmt):n(l.paid)*n(l.per);
+      const cleared=l.status==='cleared';
+      const remain=cleared?0:(has(l.remain)?n(l.remain):Math.max(total-paidAmt,0));
+      const terms=n(l.terms);
       return `<div class="card"><div class="r1">
         <div><div class="nm">${esc(l.owner)}　<span class="mono">${esc(l.plate)}</span></div>
         <div class="sub">${esc(l.company)}　·　${esc(l.bank)}</div>
         <div class="kv"><b>期間</b><span class="mono">${esc(l.start)} ~ ${esc(l.end)}</span></div>
-        <div class="kv"><b>期數</b><span>${l.paid} / ${l.terms} 期　每期 ${money(l.per)}</span></div></div>
-        <div style="text-align:right"><div class="amt pos">${money(total-paid)}</div>
-        <div class="sub">未繳</div>${tag(days(l.end))}</div></div></div>`;
+        <div class="kv"><b>期數</b><span>${terms?`${n(l.paid)} / ${terms} 期`:'未填'}　每期 ${money(l.per)}</span></div>
+        <div class="kv"><b>總額</b><span>${money(total)}${paidAmt?'　已繳 '+money(paidAmt):''}</span></div></div>
+        <div style="text-align:right"><div class="amt pos">${money(remain)}</div>
+        <div class="sub">未繳</div>${cleared?'<span class="pill p-ok">已結清</span>':tag(days(l.end))}</div></div></div>`;
     }).join('')
     :'<div class="empty">沒有貸款分期紀錄。</div>');
 }
