@@ -311,7 +311,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-17 第 11 版';
+const APP_VER='2026-09-17 第 12 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -1018,10 +1018,14 @@ function loansHtml(){
   // 上面三個數字跟電腦版的統計一致
   const n=v=>Number(v)||0;
   const has=v=>v!==undefined&&v!==null&&v!=='';
+  // 舊版匯出的資料沒有帶總額，金額會算錯（期數沒填的會變 0），講清楚而不是默默顯示錯的
+  const stale=DB.loans.some(l=>!has(l.total));
   const active=DB.loans.filter(l=>l.status!=='cleared');
   const sumRemain=active.reduce((s,l)=>s+(has(l.remain)?n(l.remain):Math.max(n(l.terms)*n(l.per)-n(l.paid)*n(l.per),0)),0);
   const sumInst=active.reduce((s,l)=>s+(has(l.inst)?n(l.inst):n(l.per)),0);
   return `<div class="ttl">💰 貸款分期 <span class="n">${DB.loans.length} 筆</span></div>`+
+    (stale?`<div class="pend" style="margin-bottom:10px">⚠️ 這份資料是舊版匯出的，貸款金額不準（沒填期數的會顯示 $0）。<br>
+      請到電腦按「匯出手機資料」，再到「資料」頁重新匯入一次。</div>`:'')+
     `<div class="grid" style="margin-bottom:4px">
       <div class="stat"><div class="l">分期中</div><div class="v">${active.length}</div></div>
       <div class="stat"><div class="l">未繳總額</div><div class="v" style="font-size:calc(23px * var(--k))">${money(sumRemain)}</div></div>
