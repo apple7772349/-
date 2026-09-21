@@ -174,6 +174,16 @@
     border:1px solid var(--line);border-radius:10px;margin:0 0 11px;background:#fff;color:inherit}
   .find:focus{outline:2px solid #f6ad55;border-color:#f6ad55}
   .det .dh{font-size:calc(13px * var(--k));color:var(--muted);font-weight:700;margin:4px 0 2px}
+  /* 流水帳明細：一列三行——類別/日期/金額、摘要（整張卡的寬度）、餘額 */
+  .nw{white-space:nowrap}
+  .lrow{padding:10px 0;border-bottom:1px solid var(--rule)}
+  .lrow:last-child{border-bottom:none}
+  .lh{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .vch{font-size:calc(13px * var(--k));font-weight:700;color:var(--navy);background:var(--field);padding:2px 8px;border-radius:6px}
+  .lh .ldt{font-size:calc(13px * var(--k));color:var(--muted);font-variant-numeric:tabular-nums}
+  .lh .lamt{margin-left:auto;font-weight:700;font-size:calc(15px * var(--k));font-variant-numeric:tabular-nums;white-space:nowrap}
+  .ld{margin-top:6px;font-size:calc(15px * var(--k));line-height:1.55;color:var(--slate)}
+  .lb{margin-top:3px;text-align:right;font-size:calc(13px * var(--k));color:var(--muted);font-variant-numeric:tabular-nums}
   .fld-lab{font-size:calc(13px * var(--k));color:var(--muted);margin:2px 0 5px 2px}
   .pick{position:relative}
   .picklist{border:1px solid var(--line);border-radius:10px;background:#fff;
@@ -315,7 +325,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-21 第 13 版';
+const APP_VER='2026-09-22 第 14 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -1092,19 +1102,36 @@ function loansHtml(){
     :'<div class="empty">沒有貸款分期紀錄。</div>');
 }
 
+// 一串用逗號隔開的車牌：只在逗號後面折行，車牌不會從「-」被切開
+function commaWrap(s){
+  const p=String(s||'').split(',');
+  return p.map((x,i)=>'<span class="nw">'+esc(x+(i<p.length-1?',':''))+'</span>').join('<wbr>');
+}
+
 function ledgersHtml(){
+  // 整列都空白的（電腦上多按出來的空列）不列出來
+  const blank=e=>!e.date&&!e.voucher&&!String(e.desc||'').trim()&&!Number(e.income||0)&&!Number(e.expense||0);
+  const ymd=d=>String(d||'').split('-').join('/');
   return `<div class="ttl">📒 流水帳 <span class="n">${DB.ledgers.length} 本</span></div>`+
-    DB.ledgers.map((l,ix)=>`<div class="card"><div class="r1">
-      <div><div class="nm">${esc(l.owner)}</div>
-      <div class="sub">${esc(l.company)}${l.period?'　·　'+esc(l.period):''}　·　${l.entries.length} 筆</div></div>
+    DB.ledgers.map((l,ix)=>{
+      const rows=[];let b=0;
+      l.entries.forEach(e=>{b+=Number(e.expense||0)-Number(e.income||0); if(!blank(e)) rows.push({e,b});});
+      return `<div class="card"><div class="r1">
+      <div style="min-width:0"><div class="nm">${esc(l.owner)}</div>
+      <div class="sub"><span class="nw">${esc(l.company)}</span>${l.period?'　·　<span class="nw">'+esc(l.period)+'</span>':''}　·　<span class="nw">${rows.length} 筆</span></div></div>
       <div style="text-align:right"><div class="amt ${l.balance>=0?'pos':'neg'}">${money(Math.abs(l.balance))}</div>
       <div class="sub">${l.balance>=0?'應付':'溢繳'}</div></div></div>
       <button class="more" data-lg="${ix}">明細　展開 ▾</button>
-      <div class="det" id="lg${ix}">${(()=>{let b=0;return l.entries.map(e=>{
-        b+=Number(e.expense||0)-Number(e.income||0);
-        return `<div class="row"><div><div>${esc(e.desc)||'—'}</div><div class="d mono">${esc(e.date)||'—'}</div></div>
-        <div style="text-align:right"><div class="mono ${e.income?'':'amt pos'}" style="font-size:13px">${e.income?'<span style="color:var(--ok)">+'+money(e.income)+'</span>':'-'+money(e.expense)}</div>
-        <div class="d mono">餘 ${money(b)}</div></div></div>`;}).join('');})()}</div></div>`).join('');
+      <div class="det" id="lg${ix}">${rows.length?rows.map(({e,b})=>{
+        const inc=Number(e.income||0), exp=Number(e.expense||0);
+        const amt=(exp?`<span style="color:var(--danger)">支出 ${money(exp)}</span>`:'')+
+          (inc?`${exp?'　':''}<span style="color:var(--ok)">收入 ${money(inc)}</span>`:'');
+        return `<div class="lrow">
+          <div class="lh">${e.voucher?`<span class="vch">${esc(e.voucher)}</span>`:''}${e.date?`<span class="ldt">${esc(ymd(e.date))}</span>`:''}<span class="lamt">${amt}</span></div>
+          ${String(e.desc||'').trim()?`<div class="ld">${commaWrap(e.desc)}</div>`:''}
+          <div class="lb">餘額 ${money(b)}</div></div>`;
+      }).join(''):'<div class="sub dim">沒有明細。</div>'}</div></div>`;
+    }).join('');
 }
 
 function statementsHtml(){
