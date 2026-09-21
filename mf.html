@@ -170,6 +170,10 @@
     border:1px solid var(--line);border-radius:8px;margin-bottom:7px;background:#fff;color:inherit}
   .add input:focus,.add select:focus{outline:2px solid #f6ad55;border-color:#f6ad55}
   .add .two{display:flex;gap:7px}
+  .find{width:100%;padding:11px 12px;font-size:calc(16px * var(--k));font-family:inherit;
+    border:1px solid var(--line);border-radius:10px;margin:0 0 11px;background:#fff;color:inherit}
+  .find:focus{outline:2px solid #f6ad55;border-color:#f6ad55}
+  .det .dh{font-size:calc(13px * var(--k));color:var(--muted);font-weight:700;margin:4px 0 2px}
   .fld-lab{font-size:calc(13px * var(--k));color:var(--muted);margin:2px 0 5px 2px}
   .pick{position:relative}
   .picklist{border:1px solid var(--line);border-radius:10px;background:#fff;
@@ -311,7 +315,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-17 第 12 版';
+const APP_VER='2026-09-21 第 13 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -410,7 +414,7 @@ const TITLES={home:'綿豐手機系統',vehicles:'車輛',owners:'車主資料',
   insurances:'保險',checks:'支票',fuel:'油單發票',books:'發票本',loans:'貸款分期',
   ledgers:'流水帳',statements:'結算單',search:'搜尋結果',data:'資料'};
 
-let page='home', kw='', vCompany='', vStatus='', ownerView='here', pending=[], sendBox='';
+let page='home', kw='', insKw='', vCompany='', vStatus='', ownerView='here', pending=[], sendBox='';
 /* 代辦分組：哪些車主展開著、正在幫誰快速新增、手機上刪掉了哪些 */
 let todoOpen={}, addingFor=null, removedIds=[], editingTodo=null;
 /* 手機第一次改某則電腦來的代辦時，記下它原本的樣子（id → 內容）。
@@ -522,7 +526,7 @@ $('q').oninput=e=>{kw=e.target.value.trim().toLowerCase();
   if(kw){page='search';}else if(page==='search'){page='home';}
   render();};
 
-function go(k){page=k;kw='';$('q').value='';window.scrollTo(0,0);render();}
+function go(k){page=k;kw='';insKw='';$('q').value='';window.scrollTo(0,0);render();}
 
 function navOn(){
   const inMore=MORE.some(m=>m.k===page);
@@ -946,14 +950,49 @@ function todoCard(t){
 
 function insurancesHtml(){
   const list=DB.insurances.slice().sort((a,b)=>(days(a.end)??9e9)-(days(b.end)??9e9));
-  return `<div class="ttl">🛡️ 保險 <span class="n">${list.length} 筆</span></div>`+
-    (list.length?list.map(i=>`<div class="card"><div class="r1">
+  if(!list.length) return '<div class="ttl">🛡️ 保險 <span class="n">0 筆</span></div><div class="empty">沒有保險紀錄。</div>';
+  return `<div class="ttl">🛡️ 保險 <span class="n" id="insCount">${list.length} 筆</span></div>
+    <input id="insFind" class="find" type="search" autocomplete="off" value="${esc(insKw)}"
+      placeholder="搜尋車號、車主、保險公司、投保內容">`+
+    list.map((i,ix)=>{
+      const cov=i.cov||{};
+      // 搜尋比對用的文字；車牌另外放一份去掉「-」的，打 118w9 也找得到
+      const find=[i.vehicle,i.owner,i.insurer,(i.types||[]).join(' '),Object.values(cov).join(' '),i.note]
+        .join(' ').toLowerCase()+' '+norm(i.vehicle).toLowerCase();
+      const typeRows=(i.types||[]).map(t=>`<div class="row"><div>${esc(t)}</div>
+        <div class="mono" style="text-align:right">${cov[t]?esc(cov[t]):'<span class="d">未填</span>'}</div></div>`).join('')
+        ||'<div class="sub dim">沒有勾投保內容</div>';
+      const fees=[['主保費',i.mainFee],['強制險',i.compFee],['保單費用',i.policyFee]]
+        .concat((i.extras||[]).map(x=>[x.name||'其他費用',x.amount]))
+        .filter(f=>Number(f[1]));
+      const feeRows=fees.map(f=>`<div class="row"><div>${esc(f[0])}</div><div class="mono">${money(f[1])}</div></div>`).join('')+
+        `<div class="row"><div style="font-weight:700">保費總計</div><div class="mono" style="font-weight:700">${money(i.total)}</div></div>`;
+      return `<div class="card" data-insfind="${esc(find)}"><div class="r1">
       <div style="min-width:0"><div class="nm mono">${esc(i.vehicle)} <span style="font-family:var(--font)">${esc(i.owner)}</span></div>
       <div class="sub">${esc(i.insurer)}　·　${esc((i.types||[]).join('、'))}</div>
       <div class="kv"><b>保期</b><span class="mono">${esc(i.start)} ~ ${esc(i.end)}</span></div>
       ${i.note?`<div class="kv"><b>備註</b><span>${esc(i.note)}</span></div>`:''}</div>
-      <div style="text-align:right"><div class="amt">${money(i.total)}</div>${tag(days(i.end))}</div></div></div>`).join('')
-    :'<div class="empty">沒有保險紀錄。</div>');
+      <div style="text-align:right"><div class="amt">${money(i.total)}</div>${tag(days(i.end))}</div></div>
+      <button class="more" data-ins="${ix}">明細　展開 ▾</button>
+      <div class="det" id="ins${ix}">${i.cov
+        ?`<div class="dh">投保內容／承保範圍</div>${typeRows}<div class="dh" style="margin-top:10px">保費</div>${feeRows}`
+        :'<div class="sub dim">這份資料是舊版匯出的，沒有明細。請到電腦按「匯出手機資料」，再重新匯入。</div>'}</div></div>`;
+    }).join('')+
+    '<div class="empty" id="insNone" style="display:none">找不到符合的保險。</div>';
+}
+
+function applyInsFilter(){
+  const q=insKw.trim().toLowerCase(), nq=norm(insKw).toLowerCase();
+  const cards=document.querySelectorAll('#body [data-insfind]');
+  let n=0;
+  cards.forEach(c=>{
+    const f=c.dataset.insfind;
+    const ok=!q||f.includes(q)||(nq!==''&&f.includes(nq));
+    c.style.display=ok?'':'none';
+    if(ok)n++;
+  });
+  const cnt=$('insCount'); if(cnt) cnt.textContent=(q?n+' / ':'')+cards.length+' 筆';
+  const none=$('insNone'); if(none) none.style.display=(q&&!n)?'':'none';
 }
 
 function checksHtml(){
@@ -1195,6 +1234,9 @@ function render(){
   if(ow) ow.oninput=e=>renderOwnerPick(e.target.value);
   const eo=$('eowner');
   if(eo) eo.oninput=e=>renderOwnerPick(e.target.value,'eowner');
+  // 保險頁自己的搜尋：只把不符合的卡片藏起來，不重畫整頁，打字才不會跳掉
+  const inf=$('insFind');
+  if(inf){ inf.oninput=e=>{insKw=e.target.value;applyInsFilter();}; applyInsFilter(); }
   navOn();
 }
 
@@ -1239,10 +1281,11 @@ $('body').addEventListener('click',e=>{
   if(vc){vCompany=vc.dataset.vc;render();window.scrollTo(0,0);return;}
   const vs=e.target.closest('[data-vs]');
   if(vs){vStatus=vs.dataset.vs;render();window.scrollTo(0,0);return;}
-  const ex=e.target.closest('[data-ob],[data-fu],[data-lg]');
+  const ex=e.target.closest('[data-ob],[data-fu],[data-lg],[data-ins]');
   if(ex){
     const id=ex.dataset.ob!==undefined?'ob'+ex.dataset.ob:
-             ex.dataset.fu!==undefined?'fu'+ex.dataset.fu:'lg'+ex.dataset.lg;
+             ex.dataset.fu!==undefined?'fu'+ex.dataset.fu:
+             ex.dataset.ins!==undefined?'ins'+ex.dataset.ins:'lg'+ex.dataset.lg;
     const el=$(id); const open=el.classList.toggle('open');
     ex.textContent=ex.textContent.replace(/[▾▴]/, open?'▴':'▾');
     return;
