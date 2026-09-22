@@ -325,7 +325,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-22 第 14 版';
+const APP_VER='2026-09-22 第 15 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -1137,7 +1137,7 @@ function ledgersHtml(){
 function statementsHtml(){
   return `<div class="ttl">📋 結算單 <span class="n">${DB.statements.length} 張</span></div>`+
     DB.statements.map(s=>{
-      const un=s.net-s.received;
+      const un=Math.abs(Number(s.net)||0)-(Number(s.received)||0);
       return `<div class="card"><div class="r1">
         <div><div class="nm">${esc(s.owner)}</div>
         <div class="sub">${esc(s.company)}　·　${esc(s.from)} ~ ${esc(s.to)}</div>
