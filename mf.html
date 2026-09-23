@@ -325,7 +325,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-22 第 15 版';
+const APP_VER='2026-09-23 第 16 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -759,6 +759,7 @@ function vehicleCard(v){
     </div>`:''}
   </div>
   ${licLine(v)}
+  ${(v.joinDate||v.joinType)?`<div class="kv"><b>進來</b><span class="mono">${esc(v.joinDate)||'—'}</span>${v.joinType?`　<span>${esc(v.joinType)}</span>`:''}</div>`:''}
   ${v.notes?`<div class="kv"><b>備註</b><span style="white-space:pre-line">${esc(v.notes)}</span></div>`:''}</div>`;
 }
 
