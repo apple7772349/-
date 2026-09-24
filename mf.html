@@ -182,7 +182,7 @@
   .vch{font-size:calc(13px * var(--k));font-weight:700;color:var(--navy);background:var(--field);padding:2px 8px;border-radius:6px}
   .lh .ldt{font-size:calc(13px * var(--k));color:var(--muted);font-variant-numeric:tabular-nums}
   .lh .lamt{margin-left:auto;font-weight:700;font-size:calc(15px * var(--k));font-variant-numeric:tabular-nums;white-space:nowrap}
-  .ld{margin-top:6px;font-size:calc(15px * var(--k));line-height:1.55;color:var(--slate)}
+  .ld{margin-top:6px;font-size:calc(15px * var(--k));line-height:1.55;color:var(--slate);overflow-wrap:anywhere}
   .lb{margin-top:3px;text-align:right;font-size:calc(13px * var(--k));color:var(--muted);font-variant-numeric:tabular-nums}
   .fld-lab{font-size:calc(13px * var(--k));color:var(--muted);margin:2px 0 5px 2px}
   .pick{position:relative}
@@ -325,7 +325,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-23 第 16 版';
+const APP_VER='2026-09-24 第 17 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -1104,9 +1104,16 @@ function loansHtml(){
 }
 
 // 一串用逗號隔開的車牌：只在逗號後面折行，車牌不會從「-」被切開
+/* 摘要可以斷在逗號或空白後面：一個車牌、一張發票就是一段，不會被拆成兩半。
+   以前只認逗號，合併後的發票摘要整串沒有逗號，就變成一整段不准斷行，
+   會把卡片撐破、整頁變成可以左右拉。太長的一段（超過 24 個字）就不鎖了，
+   讓它自己折，總比版面壞掉好。 */
 function commaWrap(s){
-  const p=String(s||'').split(',');
-  return p.map((x,i)=>'<span class="nw">'+esc(x+(i<p.length-1?',':''))+'</span>').join('<wbr>');
+  const src=String(s||'');const p=[];let cur='';
+  for(let i=0;i<src.length;i++){cur+=src[i];if(src[i]===','||src[i]===' '){p.push(cur);cur='';}}
+  if(cur)p.push(cur);
+  if(!p.length)p.push(src);
+  return p.map(x=>x.length<=24?'<span class="nw">'+esc(x)+'</span>':esc(x)).join('<wbr>');
 }
 
 function ledgersHtml(){
