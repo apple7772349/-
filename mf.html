@@ -154,6 +154,9 @@
   .trow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;
     border-bottom:1px solid var(--wash)}
   .trow:last-of-type{border-bottom:none}
+  .trow.long{flex-wrap:wrap;row-gap:6px}
+  .trow.long>.todo{flex:1 1 100% !important}
+  .trow.long>.pill{margin-left:auto}
   .tdel,.tedit{border:1px solid #f3c7c7;background:#fff5f5;color:var(--danger);font-family:inherit;
     font-size:calc(13px * var(--k));padding:5px 11px;border-radius:8px;flex-shrink:0}
   .tdel:active{background:#fde0e0}
@@ -325,7 +328,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-24 第 17 版';
+const APP_VER='2026-09-29 第 19 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -584,7 +587,7 @@ function homeHtml(){
     [...ov,...so,...no].forEach(t=>{
       const d=days(t.due);
       h+=`<div class="rem ${t.due?(d<0?'over':'due'):''}"><div>
-        <div class="rt">${esc(t.text)}</div>
+        <div class="rt">${plateSafe(t.text)}</div>
         <div class="rs">${esc(t.owner||'未指定車主')}${t.plate?'　·　'+esc(t.plate):''}${t.due?'　·　<span class="nb">'+esc(t.due)+'</span>':''}</div>
         </div>${tag(d)}</div>`;
     });
@@ -814,11 +817,13 @@ function todoRowHtml(t){
   if(t.plate) meta.push(esc(t.plate));
   if(t.due&&!t.done) meta.push(esc(t.due));
   if(t.done&&t.doneAt) meta.push(esc(t.doneAt)+' 完成');
-  return `<div class="trow">
+  // 內容長的時候，把「無期限／改／刪」放到下一行，文字才有整行的寬度放車牌
+  const long=String(t.text||'').length>14;
+  return `<div class="trow${long?' long':''}">
     <div class="todo ${t.done?'done':''}" data-tid="${esc(t.id)}" style="flex:1;min-width:0">
       <div class="box">${t.done?'✓':''}</div>
       <div style="flex:1;min-width:0">
-        <div class="nm">${esc(t.text)}</div>
+        <div class="nm">${plateSafe(t.text)}</div>
         ${meta.length?`<div class="sub dim">${meta.join('　·　')}</div>`:''}
       </div>
     </div>
@@ -952,7 +957,7 @@ function todoCard(t){
   return `<div class="card"><div class="todo ${t.done?'done':''}" data-tid="${esc(t.id)}">
     <div class="box">${t.done?'✓':''}</div>
     <div style="flex:1;min-width:0">
-      <div class="nm">${esc(t.text)}</div>
+      <div class="nm">${plateSafe(t.text)}</div>
       <div class="sub">${esc(t.owner||'未指定車主')}${t.plate?'　·　'+esc(t.plate):''}${t.due&&!t.done?'　·　'+esc(t.due):''}${t.done&&t.doneAt?'　·　'+esc(t.doneAt)+' 完成':''}</div>
     </div>
     ${t.done?'<span class="pill p-ok">已完成</span>':tag(d)}
@@ -1108,6 +1113,22 @@ function loansHtml(){
    以前只認逗號，合併後的發票摘要整串沒有逗號，就變成一整段不准斷行，
    會把卡片撐破、整頁變成可以左右拉。太長的一段（超過 24 個字）就不鎖了，
    讓它自己折，總比版面壞掉好。 */
+/* 代辦內容裡的車牌不要被拆開：「KLC-9532(34020)」整段包起來不斷行，
+   其他文字照常換行（代辦常是一整句中文，整段鎖住反而會撐破版面）。
+   括號只接短的金額，太長的括號（例如罰單明細）就不跟著鎖。 */
+function plateSafe(s){
+  const src=String(s||'');
+  // 後面緊接的逗號也包進來，不然換行會換在逗號前面，下一行開頭變成「,578-JG」
+  const re=/[A-Za-z0-9]+-[A-Za-z0-9]+(?:[(][^()]{0,12}[)])?[,，、]?/g;
+  let out='',last=0,m;
+  while((m=re.exec(src))){
+    // 後面補一個可以換行的位置：「,KLC」逗號接字母本來不能斷，整串會斷不開
+    out+=esc(src.slice(last,m.index))+'<span class="nw">'+esc(m[0])+'</span><wbr>';
+    last=m.index+m[0].length;
+  }
+  return out+esc(src.slice(last));
+}
+
 function commaWrap(s){
   const src=String(s||'');const p=[];let cur='';
   for(let i=0;i<src.length;i++){cur+=src[i];if(src[i]===','||src[i]===' '){p.push(cur);cur='';}}
