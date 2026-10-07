@@ -154,6 +154,17 @@
   .trow{display:flex;gap:10px;align-items:flex-start;padding:10px 0;
     border-bottom:1px solid var(--wash)}
   .trow:last-of-type{border-bottom:none}
+  /* 已完成：依日期分段，每列固定兩行（內容／車主＋改刪） */
+  .dday{display:flex;justify-content:space-between;align-items:center;margin:4px 0 2px;padding:7px 0 5px;
+    border-bottom:1px solid var(--rule);font-size:calc(14.5px * var(--k));font-weight:700;color:var(--navy)}
+  .dday:not(:first-child){margin-top:14px}
+  .dday .dn{font-weight:400;color:var(--muted);font-size:calc(13px * var(--k))}
+  .drow{padding:10px 0;border-bottom:1px solid var(--wash)}
+  .drow:last-child{border-bottom:none}
+  .dmeta{display:flex;align-items:center;gap:8px;margin-top:6px;padding-left:calc(27px * var(--k) + 11px)}
+  .downer{flex:1;min-width:0;font-size:calc(15px * var(--k));font-weight:600;color:var(--slate);word-break:break-word}
+  .dplate{font-weight:400;color:var(--muted)}
+  .dact{display:flex;gap:6px;flex-shrink:0}
   .trow.long{flex-wrap:wrap;row-gap:6px}
   .trow.long>.todo{flex:1 1 100% !important}
   .trow.long>.pill{margin-left:auto}
@@ -328,7 +339,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-10-07 第 20 版';
+const APP_VER='2026-10-07 第 21 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -914,13 +925,47 @@ function todoOpenHtml(){
   return h;
 }
 
+/* 已完成的一列：固定兩行，第一行內容，第二行左邊車主（和車牌）、右邊改／刪。
+   這一區全部都是已完成，不再每列貼「已完成」；完成日期寫在分段標題上。 */
+function todoDoneRowHtml(t){
+  if(editingTodo===t.id) return todoEditHtml(t);
+  return `<div class="drow">
+    <div class="todo done" data-tid="${esc(t.id)}">
+      <div class="box">✓</div>
+      <div class="nm" style="flex:1;min-width:0">${plateSafe(t.text)}</div>
+    </div>
+    <div class="dmeta">
+      <span class="downer">${esc(t.owner||'未指定車主')}${t.plate?'<span class="dplate">　·　'+esc(t.plate)+'</span>':''}</span>
+      <span class="dact">
+        <button class="tedit" data-tedit="${esc(t.id)}">改</button>
+        <button class="tdel" data-tdel="${esc(t.id)}">刪</button>
+      </span>
+    </div>
+  </div>`;
+}
+
+function todoDoneDay(s){
+  if(!s) return '沒有記到完成日期';
+  return String(s).split('-').join('/');
+}
+
 function todoDoneHtml(){
   const L=todoLists();
   if(!L.done.length) return '';
   if(L.q&&!L.doneHit.length) return `<div class="ttl">已完成 <span class="n">0 / ${L.done.length} 則</span></div>
     <div class="empty">沒有符合的已完成代辦。</div>`;
-  return `<div class="ttl">已完成 <span class="n">${L.q?L.doneHit.length+' / ':''}${L.done.length} 則　最近完成的在上面</span></div>`+
-    '<div class="card">'+L.doneHit.map(todoRowHtml).join('')+'</div>';
+  // 依完成日期分段（新的在上）；同一天裡照車主排，同一位的會排在一起
+  const byDay={};
+  L.doneHit.forEach(t=>{ const k=t.doneAt||''; (byDay[k]=byDay[k]||[]).push(t); });
+  const keys=Object.keys(byDay).sort((a,b)=>(a?0:1)-(b?0:1)||b.localeCompare(a));
+  return `<div class="ttl">已完成 <span class="n">${L.q?L.doneHit.length+' / ':''}${L.done.length} 則</span></div>`+
+    '<div class="card">'+keys.map(k=>{
+      const rows=byDay[k].slice().sort((a,b)=>
+        (a.owner?0:1)-(b.owner?0:1)||String(a.owner||'').localeCompare(String(b.owner||''),'zh-Hant')||
+        String(a.text||'').localeCompare(String(b.text||''),'zh-Hant'));
+      return `<div class="dday"><span>${esc(todoDoneDay(k))}</span><span class="dn">${rows.length} 則</span></div>`+
+        rows.map(todoDoneRowHtml).join('');
+    }).join('')+'</div>';
 }
 
 // 打字時只重畫結果，不重畫整頁，搜尋框才不會跳掉
