@@ -131,6 +131,9 @@
 
   .det{display:none;margin-top:9px;padding-top:9px;border-top:1px dashed var(--line)}
   .det.open{display:block}
+  /* 首頁「還有 N 則未到期　展開 ▾」：置中的連結字，跟其他展開一樣一看就知道可以點 */
+  .fa-more{display:block;width:100%;text-align:center}
+  .fa-det{border-top:none;margin-top:4px;padding-top:0}
   .row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;
     border-bottom:1px solid var(--wash);font-size:calc(15px * var(--k))}
   .row:last-child{border-bottom:none}
@@ -339,7 +342,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-10-07 第 21 版';
+const APP_VER='2026-10-07 第 22 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -603,7 +606,15 @@ function homeHtml(){
         <div class="rs">${esc(t.owner||'未指定車主')}${t.plate?'　·　'+esc(t.plate):''}${t.due?'　·　<span class="nb">'+esc(t.due)+'</span>':''}</div>
         </div>${tag(d)}</div>`;
     });
-    if(fa.length) h+=`<div class="empty" style="padding:12px">還有 ${fa.length} 則未到期</div>`;
+    /* 一個月以後才到期的收在這裡，點一下就在原地展開（以前只是一行字，點不開） */
+    if(fa.length){
+      fa.sort((a,b)=>days(a.due)-days(b.due));
+      h+=`<button class="more fa-more" data-hfa="1">還有 ${fa.length} 則未到期　展開 ▾</button>
+        <div class="det fa-det" id="hfa1">`+fa.map(t=>`<div class="rem"><div>
+          <div class="rt">${plateSafe(t.text)}</div>
+          <div class="rs">${esc(t.owner||'未指定車主')}${t.plate?'　·　'+esc(t.plate):''}　·　<span class="nb">${esc(t.due)}</span></div>
+          </div>${tag(days(t.due))}</div>`).join('')+'</div>';
+    }
   }
 
   h+=`<div class="ttl">🚚 車輛提醒
@@ -1419,11 +1430,12 @@ $('body').addEventListener('click',e=>{
   if(vc){vCompany=vc.dataset.vc;render();window.scrollTo(0,0);return;}
   const vs=e.target.closest('[data-vs]');
   if(vs){vStatus=vs.dataset.vs;render();window.scrollTo(0,0);return;}
-  const ex=e.target.closest('[data-ob],[data-fu],[data-lg],[data-ins]');
+  const ex=e.target.closest('[data-ob],[data-fu],[data-lg],[data-ins],[data-hfa]');
   if(ex){
     const id=ex.dataset.ob!==undefined?'ob'+ex.dataset.ob:
              ex.dataset.fu!==undefined?'fu'+ex.dataset.fu:
-             ex.dataset.ins!==undefined?'ins'+ex.dataset.ins:'lg'+ex.dataset.lg;
+             ex.dataset.ins!==undefined?'ins'+ex.dataset.ins:
+             ex.dataset.hfa!==undefined?'hfa'+ex.dataset.hfa:'lg'+ex.dataset.lg;
     const el=$(id); const open=el.classList.toggle('open');
     ex.textContent=ex.textContent.replace(/[▾▴]/, open?'▴':'▾');
     return;
