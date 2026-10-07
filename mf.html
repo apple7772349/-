@@ -328,7 +328,7 @@ function copyText(txt,label){
 /* 資料存在手機的 localStorage，靠「匯入資料」從電腦帶進來。
    程式本體不含任何資料，所以放公開空間也不會外洩。 */
 /* 版本編號：每次改手機版就往上加。用來確認 GitHub 上換過去了沒有。 */
-const APP_VER='2026-09-29 第 19 版';
+const APP_VER='2026-10-07 第 20 版';
 
 const LS_DATA='mienfeng_data';
 const LS_FS='mienfeng_fontsize';
@@ -430,6 +430,7 @@ const TITLES={home:'綿豐手機系統',vehicles:'車輛',owners:'車主資料',
 let page='home', kw='', insKw='', vCompany='', vStatus='', ownerView='here', pending=[], sendBox='';
 /* 代辦分組：哪些車主展開著、正在幫誰快速新增、手機上刪掉了哪些 */
 let todoOpen={}, addingFor=null, removedIds=[], editingTodo=null;
+let todoKw='';   // 代辦頁自己的搜尋字
 /* 手機第一次改某則電腦來的代辦時，記下它原本的樣子（id → 內容）。
    回傳時一起送，電腦只套用手機真的改過的欄位，電腦自己改的不會被蓋掉 */
 let origs={};
@@ -539,7 +540,7 @@ $('q').oninput=e=>{kw=e.target.value.trim().toLowerCase();
   if(kw){page='search';}else if(page==='search'){page='home';}
   render();};
 
-function go(k){page=k;kw='';insKw='';$('q').value='';window.scrollTo(0,0);render();}
+function go(k){page=k;kw='';insKw='';todoKw='';$('q').value='';window.scrollTo(0,0);render();}
 
 function navOn(){
   const inMore=MORE.some(m=>m.k===page);
@@ -852,12 +853,84 @@ function todoEditHtml(t){
   </div>`;
 }
 
-function todosHtml(){
+/* 代辦搜尋：內容、車主、車牌、日期都比；車牌另外比去掉「-」的，打 klc9532 也找得到 */
+function todoMatches(t,q,nq){
+  if(!q) return true;
+  const f=[t.text,t.owner,t.plate,t.due,t.doneAt].join(' ').toLowerCase();
+  return f.includes(q) || (nq!=='' && (norm(t.text)+' '+norm(t.plate)).toLowerCase().includes(nq));
+}
+
+function todoLists(){
+  const q=todoKw.trim().toLowerCase(), nq=norm(todoKw).toLowerCase();
   const sortFn=(a,b)=>{const x=days(a.due),y=days(b.due);
     if(x===null&&y===null)return 0; if(x===null)return 1; if(y===null)return -1; return x-y;};
   const open=DB.todos.filter(t=>!t.done).sort(sortFn);
-  const done=DB.todos.filter(t=>t.done);
+  // 已完成：最近完成的排最上面；沒記到完成日期的舊資料排最後
+  const done=DB.todos.filter(t=>t.done).sort((a,b)=>String(b.doneAt||'').localeCompare(String(a.doneAt||'')));
+  return { q, open, done, openHit:open.filter(t=>todoMatches(t,q,nq)), doneHit:done.filter(t=>todoMatches(t,q,nq)) };
+}
 
+function todoOpenHtml(){
+  const L=todoLists();
+  const searching=!!L.q;
+  const groups=[];
+  L.openHit.forEach(t=>{
+    const key=t.owner||'';
+    let g=groups.find(x=>x.key===key);
+    if(!g){ g={key,rows:[]}; groups.push(g); }
+    g.rows.push(t);
+  });
+  groups.sort((a,b)=>(a.key?0:1)-(b.key?0:1)||a.key.localeCompare(b.key,'zh-Hant'));
+  // 只有一兩組時直接展開，不用多按一下
+  if(!searching&&!Object.keys(todoOpen).length&&groups.length&&groups.length<=2){
+    groups.forEach(g=>{ todoOpen[g.key]=true; });
+  }
+  let h=`<div class="ttl">未完成 <span class="n">${searching?L.openHit.length+' / '+L.open.length+' 則':L.open.length+' 則　'+groups.length+' 位車主'}</span></div>`;
+  if(!groups.length) h+=`<div class="empty">${searching?'沒有符合的未完成代辦。':'沒有未完成的代辦。'}</div>`;
+  h+=groups.map(g=>{
+    const name=g.key||'未指定車主';
+    const isOpen=searching||!!todoOpen[g.key];   // 搜尋時有符合的組直接攤開
+    const overdue=g.rows.filter(t=>{const d=days(t.due);return d!==null&&d<0;}).length;
+    return `<div class="card">
+      <div class="grp-head" ${searching?'':`data-grp="${esc(g.key)}"`}>
+        <div class="grp-name">${esc(name)}</div>
+        <div class="grp-right">
+          ${overdue?`<span class="pill p-over">逾期 ${overdue}</span>`:''}
+          <span class="pill p-flat">${g.rows.length} 則</span>
+          ${searching?'':`<span class="chev ${isOpen?'open':''}">▾</span>`}
+        </div>
+      </div>
+      ${isOpen?`<div class="grp-body">
+        ${g.rows.map(todoRowHtml).join('')}
+        ${searching?'':(addingFor===g.key?`<div class="qadd">
+          <input id="qtext" placeholder="要做什麼？" autocomplete="off">
+          <div class="fld-lab">期限（可留白）</div>
+          <input id="qdue" type="date">
+          <button class="btn" data-qsave="${esc(g.key)}">新增到 ${esc(name)}</button>
+        </div>`:`<button class="more" data-addfor="${esc(g.key)}">＋ 幫 ${esc(name)} 新增一則</button>`)}
+      </div>`:''}
+    </div>`;
+  }).join('');
+  return h;
+}
+
+function todoDoneHtml(){
+  const L=todoLists();
+  if(!L.done.length) return '';
+  if(L.q&&!L.doneHit.length) return `<div class="ttl">已完成 <span class="n">0 / ${L.done.length} 則</span></div>
+    <div class="empty">沒有符合的已完成代辦。</div>`;
+  return `<div class="ttl">已完成 <span class="n">${L.q?L.doneHit.length+' / ':''}${L.done.length} 則　最近完成的在上面</span></div>`+
+    '<div class="card">'+L.doneHit.map(todoRowHtml).join('')+'</div>';
+}
+
+// 打字時只重畫結果，不重畫整頁，搜尋框才不會跳掉
+function applyTodoFilter(){
+  const a=$('todoOpenRes'), b=$('todoDoneRes');
+  if(a) a.innerHTML=todoOpenHtml();
+  if(b) b.innerHTML=todoDoneHtml();
+}
+
+function todosHtml(){
   let h='';
   if(pending.length||removedIds.length){
     h+=`<div class="pend">
@@ -867,45 +940,9 @@ function todosHtml(){
     </div>`;
   }
 
-  const groups=[];
-  open.forEach(t=>{
-    const key=t.owner||'';
-    let g=groups.find(x=>x.key===key);
-    if(!g){ g={key,rows:[]}; groups.push(g); }
-    g.rows.push(t);
-  });
-  groups.sort((a,b)=>(a.key?0:1)-(b.key?0:1)||a.key.localeCompare(b.key,'zh-Hant'));
-  // 只有一兩組時直接展開，不用多按一下
-  if(!Object.keys(todoOpen).length&&groups.length&&groups.length<=2){
-    groups.forEach(g=>{ todoOpen[g.key]=true; });
-  }
-
-  h+=`<div class="ttl">未完成 <span class="n">${open.length} 則　${groups.length} 位車主</span></div>`;
-  if(!groups.length) h+='<div class="empty">沒有未完成的代辦。</div>';
-  h+=groups.map(g=>{
-    const name=g.key||'未指定車主';
-    const isOpen=!!todoOpen[g.key];
-    const overdue=g.rows.filter(t=>{const d=days(t.due);return d!==null&&d<0;}).length;
-    return `<div class="card">
-      <div class="grp-head" data-grp="${esc(g.key)}">
-        <div class="grp-name">${esc(name)}</div>
-        <div class="grp-right">
-          ${overdue?`<span class="pill p-over">逾期 ${overdue}</span>`:''}
-          <span class="pill p-flat">${g.rows.length} 則</span>
-          <span class="chev ${isOpen?'open':''}">▾</span>
-        </div>
-      </div>
-      ${isOpen?`<div class="grp-body">
-        ${g.rows.map(todoRowHtml).join('')}
-        ${addingFor===g.key?`<div class="qadd">
-          <input id="qtext" placeholder="要做什麼？" autocomplete="off">
-          <div class="fld-lab">期限（可留白）</div>
-          <input id="qdue" type="date">
-          <button class="btn" data-qsave="${esc(g.key)}">新增到 ${esc(name)}</button>
-        </div>`:`<button class="more" data-addfor="${esc(g.key)}">＋ 幫 ${esc(name)} 新增一則</button>`}
-      </div>`:''}
-    </div>`;
-  }).join('');
+  h+=`<input id="todoFind" class="find" type="search" autocomplete="off" value="${esc(todoKw)}"
+      placeholder="搜尋代辦內容、車主、車牌">`;
+  h+='<div id="todoOpenRes">'+todoOpenHtml()+'</div>';
 
   h+=`<div class="ttl">新增給其他人</div>
   <div class="add">
@@ -917,10 +954,7 @@ function todosHtml(){
     <button class="btn" id="nadd">＋ 新增代辦</button>
   </div>`;
 
-  if(done.length){
-    h+=`<div class="ttl">已完成 <span class="n">${done.length} 則</span></div>`;
-    h+='<div class="card">'+done.map(todoRowHtml).join('')+'</div>';
-  }
+  h+='<div id="todoDoneRes">'+todoDoneHtml()+'</div>';
   return h;
 }
 /* 車主搜尋：打姓名、公司或車牌都能找。68 位車主用下拉太難翻。 */
@@ -1293,6 +1327,9 @@ function render(){
   // 保險頁自己的搜尋：只把不符合的卡片藏起來，不重畫整頁，打字才不會跳掉
   const inf=$('insFind');
   if(inf){ inf.oninput=e=>{insKw=e.target.value;applyInsFilter();}; applyInsFilter(); }
+  // 代辦頁的搜尋也一樣，只重畫結果
+  const tf=$('todoFind');
+  if(tf) tf.oninput=e=>{todoKw=e.target.value;applyTodoFilter();};
   navOn();
 }
 
